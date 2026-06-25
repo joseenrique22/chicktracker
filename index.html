@@ -336,7 +336,10 @@
 
 <header>
   <div class="logo">🐔 Chick<span>Track</span></div>
-  <div class="date-tag" id="dateTag"></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="date-tag" id="dateTag"></div>
+    <button class="btn btn-ghost" style="font-size:11px;padding:4px 12px;" onclick="resetData()">Reset</button>
+  </div>
 </header>
 
 <!-- SUMMARY CARDS -->
@@ -388,7 +391,19 @@ const wholeTotalKg = 14.46;
 const wholeTotalPcs = 15;
 
 // ── STATE ─────────────────────────────────────────────
-const state = {
+function loadState() {
+  try {
+    const saved = localStorage.getItem('chicktrack');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return null;
+}
+
+function saveState() {
+  localStorage.setItem('chicktrack', JSON.stringify(state));
+}
+
+const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0 })),
   whole: {
     totalKg: wholeTotalKg,
@@ -398,6 +413,9 @@ const state = {
     soldPcs: 0,
   },
 };
+
+const saved = loadState();
+const state = saved || defaultState;
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -625,8 +643,8 @@ function updatePart(id) {
   state.parts[idx].buyPkg = buyPkg;
   state.parts[idx].sellPkg = sellPkg;
   state.parts[idx].kg = totalKg;
+  saveState();
   render();
-  // Reopen panel after re-render
   setTimeout(() => togglePanel('panel-'+id), 10);
 }
 
@@ -641,8 +659,17 @@ function updateWhole() {
   state.whole.totalKg = totalKg;
   state.whole.buyPkg = buyPkg;
   state.whole.sellPkg = sellPkg;
+  saveState();
   render();
   setTimeout(() => togglePanel('panel-whole'), 10);
+}
+
+function resetData() {
+  if (!confirm('Reset all sales data back to zero?')) return;
+  state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
+  state.whole = { totalKg: wholeTotalKg, totalPcs: wholeTotalPcs, buyPkg: wholeBuyPkg, sellPkg: wholeSellPkg, soldPcs: 0 };
+  saveState();
+  render();
 }
 
 // ── DATE ──────────────────────────────────────────────
