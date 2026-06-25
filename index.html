@@ -369,7 +369,7 @@
 
 <!-- WHOLE CHICKEN -->
 <div class="section">
-  <div class="section-title">Whole Chicken — 15 pcs · 14.46 kg</div>
+  <div class="section-title">Whole Chicken — 15 pcs · 14.46 kg · Tap piece to toggle sold</div>
   <div id="whole-section"></div>
 </div>
 
@@ -385,10 +385,23 @@ const parts = [
   { id:'isaw',  name:'Isaw',         kg:10,   buyPkg:105, sellPkg:140, emoji:'🍢' },
 ];
 
-const wholeBuyPkg = 154;
-const wholeSellPkg = 220;
-const wholeTotalKg = 14.46;
-const wholeTotalPcs = 15;
+const wholePieces = [
+  { kg:0.955, cost:147.00, sell:210.00 },
+  { kg:0.891, cost:137.20, sell:196.00 },
+  { kg:0.932, cost:143.50, sell:205.00 },
+  { kg:0.932, cost:143.50, sell:205.00 },
+  { kg:0.909, cost:140.00, sell:200.00 },
+  { kg:0.864, cost:133.00, sell:190.00 },
+  { kg:0.886, cost:136.50, sell:195.00 },
+  { kg:0.977, cost:150.50, sell:215.00 },
+  { kg:0.909, cost:140.00, sell:200.00 },
+  { kg:0.909, cost:140.00, sell:200.00 },
+  { kg:0.955, cost:147.00, sell:210.00 },
+  { kg:0.909, cost:140.00, sell:200.00 },
+  { kg:0.932, cost:143.50, sell:205.00 },
+  { kg:0.932, cost:143.50, sell:205.00 },
+  { kg:0.977, cost:150.50, sell:215.00 },
+];
 
 // ── FIREBASE SYNC ─────────────────────────────────────
 const FB_URL = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/data.json';
@@ -416,13 +429,7 @@ function saveState() {
 // ── STATE ─────────────────────────────────────────────
 const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0 })),
-  whole: {
-    totalKg: wholeTotalKg,
-    totalPcs: wholeTotalPcs,
-    buyPkg: wholeBuyPkg,
-    sellPkg: wholeSellPkg,
-    soldPcs: 0,
-  },
+  whole: { sold: wholePieces.map(() => false) },
 };
 
 let localSaved = null;
@@ -517,78 +524,44 @@ function renderParts() {
 // ── RENDER WHOLE CHICKEN ──────────────────────────────
 function renderWhole() {
   const container = document.getElementById('whole-section');
-  const w = state.whole;
-  const kgPerPc = w.totalKg / w.totalPcs;
-  const soldKg = w.soldPcs * kgPerPc;
-  const remainingPcs = Math.max(0, w.totalPcs - w.soldPcs);
-  const remainingKg = Math.max(0, w.totalKg - soldKg);
-  const soldRevenue = soldKg * w.sellPkg;
-  const soldCapital = soldKg * w.buyPkg;
-  const soldProfit = soldRevenue - soldCapital;
-  const pct = Math.min(100, (w.soldPcs / w.totalPcs) * 100);
+  const sold = state.whole.sold || wholePieces.map(() => false);
+  const soldCount = sold.filter(Boolean).length;
+  const totalCount = wholePieces.length;
+  const soldRev = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.sell : 0), 0);
+  const soldCost = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.cost : 0), 0);
+  const soldProfit = soldRev - soldCost;
+  const soldKg = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.kg : 0), 0);
+  const remainingKg = wholePieces.reduce((a, p, i) => a + (!sold[i] ? p.kg : 0), 0);
+  const pct = Math.min(100, (soldCount / totalCount) * 100);
   const [label, badgeClass] = soldBadge(pct);
+
+  const pieceTiles = wholePieces.map((p, i) => `
+    <div class="piece-item ${sold[i] ? 'sold' : ''}" onclick="togglePiece(${i})">
+      ${sold[i] ? '<span class="sold-tag">✓</span>' : ''}
+      <div class="piece-price">${fmt(p.sell)}</div>
+      <div class="piece-label">#${i+1} · ${p.kg}kg</div>
+      <div class="piece-label" style="color:${sold[i] ? 'var(--green)' : 'var(--accent)'}">+${fmt(p.sell - p.cost)}</div>
+    </div>
+  `).join('');
 
   container.innerHTML = `
     <div class="product-card">
-      <div class="product-header" onclick="togglePanel('panel-whole', this)">
-        <div class="product-name">
-          🐓 Whole Chicken
-          <span class="badge ${badgeClass}">${label}</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:20px">
-          <div class="product-stats">
-            <div class="stat">
-              <div class="stat-label">Profit</div>
-              <div class="stat-value profit">${fmt(soldProfit)}</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Remaining</div>
-              <div class="stat-value remaining">${remainingPcs} pcs · ${fmtKg(remainingKg)}</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Sold</div>
-              <div class="stat-value">${w.soldPcs} pcs · ${fmtKg(soldKg)}</div>
-            </div>
-          </div>
-          <div class="toggle-arrow" id="arrow-whole">▼</div>
+      <div class="product-header">
+        <div class="product-name">🐓 Whole Chicken <span class="badge ${badgeClass}">${label}</span></div>
+        <div class="product-stats">
+          <div class="stat"><div class="stat-label">Profit</div><div class="stat-value profit">${fmt(soldProfit)}</div></div>
+          <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${totalCount - soldCount} pcs · ${fmtKg(remainingKg)}</div></div>
+          <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${soldCount} pcs · ${fmtKg(soldKg)}</div></div>
         </div>
       </div>
       <div class="progress-wrap">
         <div class="progress-labels">
-          <span>Sold ${w.soldPcs} of ${w.totalPcs} pcs · ${fmtKg(soldKg)} of ${fmtKg(w.totalKg)}</span>
+          <span>Sold ${soldCount} of ${totalCount} pcs · ${fmtKg(soldKg)} of ${fmtKg(wholePieces.reduce((a,p)=>a+p.kg,0))}</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
       </div>
-      <div class="input-panel" id="panel-whole">
-        <div class="input-row">
-          <div class="input-group">
-            <label>Sold (pcs)</label>
-            <input type="number" id="whole-soldpcs" value="${w.soldPcs}" min="0" max="${w.totalPcs}" step="1" placeholder="0">
-          </div>
-          <div class="input-group">
-            <label>Total (pcs)</label>
-            <input type="number" id="whole-totalpcs" value="${w.totalPcs}" min="1" step="1">
-          </div>
-          <div class="input-group">
-            <label>Total (kg)</label>
-            <input type="number" id="whole-totalkg" value="${w.totalKg}" min="0" step="0.01">
-          </div>
-          <div class="input-group">
-            <label>Buy/kg</label>
-            <input type="number" id="whole-buy" value="${w.buyPkg}" min="0" step="1">
-          </div>
-          <div class="input-group">
-            <label>Sell/kg</label>
-            <input type="number" id="whole-sell" value="${w.sellPkg}" min="0" step="1">
-          </div>
-          <button class="btn btn-primary" onclick="updateWhole()">Apply</button>
-          <button class="btn btn-ghost" onclick="togglePanel('panel-whole')">Close</button>
-        </div>
-        <div style="margin-top:12px;font-size:12px;color:var(--muted);">
-          ≈ ${fmtKg(kgPerPc)} per piece &nbsp;·&nbsp; Revenue/pc: ${fmt(kgPerPc * w.sellPkg)} &nbsp;·&nbsp; Cost/pc: ${fmt(kgPerPc * w.buyPkg)}
-        </div>
-      </div>
+      <div class="pieces-grid">${pieceTiles}</div>
     </div>
   `;
 }
@@ -601,13 +574,11 @@ function renderSummary() {
   const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
 
   // Whole
-  const w = state.whole;
-  const kgPerPc = w.totalKg / w.totalPcs;
-  const wholeSoldKg = w.soldPcs * kgPerPc;
-  const wholeCap = w.totalKg * w.buyPkg;
-  const wholeSoldRev = wholeSoldKg * w.sellPkg;
-  const wholeSoldProfit = wholeSoldRev - (wholeSoldKg * w.buyPkg);
-  const totalPotentialRevWhole = w.totalKg * w.sellPkg;
+  const sold = state.whole.sold || wholePieces.map(() => false);
+  const wholeCap = wholePieces.reduce((a,p) => a + p.cost, 0);
+  const wholeSoldRev = wholePieces.reduce((a,p,i) => a + (sold[i] ? p.sell : 0), 0);
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (sold[i] ? p.sell - p.cost : 0), 0);
+  const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
   const totalCap = partsCap + wholeCap;
   const totalRev = partsSoldRev + wholeSoldRev;
@@ -660,26 +631,18 @@ function updatePart(id) {
   setTimeout(() => togglePanel('panel-'+id), 10);
 }
 
-function updateWhole() {
-  const soldPcs = parseInt(document.getElementById('whole-soldpcs').value) || 0;
-  const totalPcs = parseInt(document.getElementById('whole-totalpcs').value) || 1;
-  const totalKg = parseFloat(document.getElementById('whole-totalkg').value) || 0;
-  const buyPkg = parseFloat(document.getElementById('whole-buy').value) || 0;
-  const sellPkg = parseFloat(document.getElementById('whole-sell').value) || 0;
-  state.whole.soldPcs = Math.min(soldPcs, totalPcs);
-  state.whole.totalPcs = totalPcs;
-  state.whole.totalKg = totalKg;
-  state.whole.buyPkg = buyPkg;
-  state.whole.sellPkg = sellPkg;
+function togglePiece(i) {
+  if (!state.whole.sold) state.whole.sold = wholePieces.map(() => false);
+  state.whole.sold[i] = !state.whole.sold[i];
   saveState();
-  render();
-  setTimeout(() => togglePanel('panel-whole'), 10);
+  renderWhole();
+  renderSummary();
 }
 
 function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
   state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
-  state.whole = { totalKg: wholeTotalKg, totalPcs: wholeTotalPcs, buyPkg: wholeBuyPkg, sellPkg: wholeSellPkg, soldPcs: 0 };
+  state.whole = { sold: wholePieces.map(() => false) };
   saveState();
   render();
 }
