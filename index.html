@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chicken Sales Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #0d0f14;
+    --surface: #161920;
+    --surface2: #1e2229;
+    --border: #2a2f3a;
+    --accent: #f5a623;
+    --accent2: #ff6b35;
+    --green: #2ecc71;
+    --red: #e74c3c;
+    --text: #f0f2f5;
+    --muted: #6b7280;
+    --label: #9ca3af;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 24px 16px 60px;
+  }
+
+  /* HEADER */
+  header {
+    max-width: 960px;
+    margin: 0 auto 32px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: var(--accent); }
+
+  .date-tag {
+    font-size: 12px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 20px;
+  }
+
+  /* SUMMARY CARDS */
+  .summary-grid {
+    max-width: 960px;
+    margin: 0 auto 28px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .card.cap::before { background: #4f8ef7; }
+  .card.rev::before { background: var(--accent); }
+  .card.pro::before { background: var(--green); }
+
+  .card-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .card-value {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .card.cap .card-value { color: #4f8ef7; }
+  .card.rev .card-value { color: var(--accent); }
+  .card.pro .card-value { color: var(--green); }
+  .card-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 5px;
+  }
+
+  /* SECTION */
+  .section {
+    max-width: 960px;
+    margin: 0 auto 20px;
+  }
+
+  .section-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 10px;
+    padding-left: 2px;
+  }
+
+  /* PRODUCT ROW */
+  .product-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .product-card:hover { border-color: #3a3f4a; }
+
+  .product-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    padding: 14px 18px;
+    cursor: pointer;
+    gap: 12px;
+  }
+
+  .product-name {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .badge {
+    font-size: 10px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .badge-green { background: rgba(46,204,113,0.15); color: var(--green); }
+  .badge-yellow { background: rgba(245,166,35,0.15); color: var(--accent); }
+  .badge-red { background: rgba(231,76,60,0.15); color: var(--red); }
+
+  .product-stats {
+    display: flex;
+    gap: 20px;
+    align-items: center;
+  }
+
+  .stat { text-align: right; }
+  .stat-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; }
+  .stat-value.profit { color: var(--green); }
+  .stat-value.remaining { color: var(--accent); }
+
+  /* PROGRESS BAR */
+  .progress-wrap {
+    padding: 0 18px 14px;
+  }
+  .progress-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .progress-bar {
+    height: 5px;
+    background: var(--surface2);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 10px;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    transition: width 0.4s ease;
+  }
+
+  /* SOLD INPUT PANEL */
+  .input-panel {
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+    display: none;
+  }
+  .input-panel.open { display: block; }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 100px;
+  }
+  .input-group label {
+    font-size: 11px;
+    color: var(--label);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .input-group input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    padding: 8px 12px;
+    width: 100%;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .input-group input:focus { border-color: var(--accent); }
+
+  .btn {
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: none;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    align-self: flex-end;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent); color: #000; }
+  .btn-ghost { background: var(--surface); color: var(--label); border: 1px solid var(--border); }
+  .btn:hover { opacity: 0.85; }
+
+  /* WHOLE CHICKEN PIECES */
+  .pieces-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+    gap: 8px;
+    padding: 14px 18px;
+    border-top: 1px solid var(--border);
+  }
+
+  .piece-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 10px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .piece-item:hover { border-color: var(--accent); }
+  .piece-item.sold {
+    background: rgba(46,204,113,0.08);
+    border-color: rgba(46,204,113,0.3);
+  }
+  .piece-item.sold .piece-price { color: var(--green); }
+  .piece-item.sold .piece-label { color: var(--green); opacity: 0.7; }
+
+  .piece-price {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .piece-label {
+    font-size: 10px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .sold-tag {
+    position: absolute;
+    top: 4px; right: 5px;
+    font-size: 9px;
+    color: var(--green);
+    font-weight: 600;
+  }
+
+  /* TOGGLE ARROW */
+  .toggle-arrow {
+    font-size: 12px;
+    color: var(--muted);
+    transition: transform 0.2s;
+  }
+  .toggle-arrow.open { transform: rotate(180deg); }
+
+  /* FOOTER NOTE */
+  .footer-note {
+    max-width: 960px;
+    margin: 28px auto 0;
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  @media (max-width: 600px) {
+    .summary-grid { grid-template-columns: 1fr; }
+    .product-stats { gap: 12px; }
+    .card-value { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🐔 Chick<span>Track</span></div>
+  <div class="date-tag" id="dateTag"></div>
+</header>
+
+<!-- SUMMARY CARDS -->
+<div class="summary-grid">
+  <div class="card cap">
+    <div class="card-label">Total Capital</div>
+    <div class="card-value" id="totalCap">—</div>
+    <div class="card-sub" id="totalCapSub"></div>
+  </div>
+  <div class="card rev">
+    <div class="card-label">Revenue (Sold)</div>
+    <div class="card-value" id="totalRev">—</div>
+    <div class="card-sub" id="totalRevSub"></div>
+  </div>
+  <div class="card pro">
+    <div class="card-label">Profit (Sold)</div>
+    <div class="card-value" id="totalPro">—</div>
+    <div class="card-sub" id="totalProSub"></div>
+  </div>
+</div>
+
+<!-- CHICKEN PARTS -->
+<div class="section">
+  <div class="section-title">Chicken Parts</div>
+  <div id="parts-list"></div>
+</div>
+
+<!-- WHOLE CHICKEN -->
+<div class="section">
+  <div class="section-title">Whole Chicken — 15 pcs · 14.46 kg</div>
+  <div id="whole-section"></div>
+</div>
+
+<div class="footer-note">Tap any row to adjust · Whole chicken tracked by pcs sold</div>
+
+<script>
+// ── DATA ──────────────────────────────────────────────
+const parts = [
+  { id:'head',  name:'Chicken Head', kg:10,   buyPkg:60,  sellPkg:80,  emoji:'🐔' },
+  { id:'feet',  name:'Chicken Feet', kg:10,   buyPkg:95,  sellPkg:125, emoji:'🦶' },
+  { id:'proven',name:'Proven',       kg:10,   buyPkg:95,  sellPkg:140, emoji:'🫀' },
+  { id:'fat',   name:'Chicken Fat',  kg:3,    buyPkg:75,  sellPkg:100, emoji:'🧈' },
+  { id:'isaw',  name:'Isaw',         kg:10,   buyPkg:105, sellPkg:140, emoji:'🍢' },
+];
+
+const wholeBuyPkg = 154;
+const wholeSellPkg = 220;
+const wholeTotalKg = 14.46;
+const wholeTotalPcs = 15;
+
+// ── STATE ─────────────────────────────────────────────
+const state = {
+  parts: parts.map(p => ({ ...p, soldKg: 0 })),
+  whole: {
+    totalKg: wholeTotalKg,
+    totalPcs: wholeTotalPcs,
+    buyPkg: wholeBuyPkg,
+    sellPkg: wholeSellPkg,
+    soldPcs: 0,
+  },
+};
+
+// ── HELPERS ───────────────────────────────────────────
+const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
+const fmtKg = n => Number(n).toFixed(2) + ' kg';
+
+function soldBadge(pct) {
+  if (pct >= 100) return ['Sold Out', 'badge-green'];
+  if (pct >= 50)  return ['Selling', 'badge-yellow'];
+  return ['Available', 'badge-red'];
+}
+
+// ── RENDER PARTS ──────────────────────────────────────
+function renderParts() {
+  const container = document.getElementById('parts-list');
+  container.innerHTML = '';
+
+  state.parts.forEach((p, idx) => {
+    const capital = p.kg * p.buyPkg;
+    const totalRev = p.kg * p.sellPkg;
+    const soldRev = p.soldKg * p.sellPkg;
+    const soldProfit = p.soldKg * (p.sellPkg - p.buyPkg);
+    const remaining = Math.max(0, p.kg - p.soldKg);
+    const pct = Math.min(100, (p.soldKg / p.kg) * 100);
+    const [label, badgeClass] = soldBadge(pct);
+
+    const div = document.createElement('div');
+    div.className = 'product-card';
+    div.innerHTML = `
+      <div class="product-header" onclick="togglePanel('panel-${p.id}', this)">
+        <div class="product-name">
+          <span>${p.emoji}</span>
+          ${p.name}
+          <span class="badge ${badgeClass}">${label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:20px">
+          <div class="product-stats">
+            <div class="stat">
+              <div class="stat-label">Profit</div>
+              <div class="stat-value profit">${fmt(soldProfit)}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Remaining</div>
+              <div class="stat-value remaining">${fmtKg(remaining)}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Sold</div>
+              <div class="stat-value">${fmtKg(p.soldKg)}</div>
+            </div>
+          </div>
+          <div class="toggle-arrow" id="arrow-${p.id}">▼</div>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-labels">
+          <span>Sold ${fmtKg(p.soldKg)} of ${fmtKg(p.kg)}</span>
+          <span>${pct.toFixed(0)}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="input-panel" id="panel-${p.id}">
+        <div class="input-row">
+          <div class="input-group">
+            <label>Sold (kg)</label>
+            <input type="number" id="sold-${p.id}" value="${p.soldKg}" min="0" max="${p.kg}" step="0.1" placeholder="0.00">
+          </div>
+          <div class="input-group">
+            <label>Buy/kg</label>
+            <input type="number" id="buy-${p.id}" value="${p.buyPkg}" min="0" step="1">
+          </div>
+          <div class="input-group">
+            <label>Sell/kg</label>
+            <input type="number" id="sell-${p.id}" value="${p.sellPkg}" min="0" step="1">
+          </div>
+          <div class="input-group">
+            <label>Total kg</label>
+            <input type="number" id="total-${p.id}" value="${p.kg}" min="0" step="0.1">
+          </div>
+          <button class="btn btn-primary" onclick="updatePart('${p.id}')">Apply</button>
+          <button class="btn btn-ghost" onclick="togglePanel('panel-${p.id}')">Close</button>
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+// ── RENDER WHOLE CHICKEN ──────────────────────────────
+function renderWhole() {
+  const container = document.getElementById('whole-section');
+  const w = state.whole;
+  const kgPerPc = w.totalKg / w.totalPcs;
+  const soldKg = w.soldPcs * kgPerPc;
+  const remainingPcs = Math.max(0, w.totalPcs - w.soldPcs);
+  const remainingKg = Math.max(0, w.totalKg - soldKg);
+  const soldRevenue = soldKg * w.sellPkg;
+  const soldCapital = soldKg * w.buyPkg;
+  const soldProfit = soldRevenue - soldCapital;
+  const pct = Math.min(100, (w.soldPcs / w.totalPcs) * 100);
+  const [label, badgeClass] = soldBadge(pct);
+
+  container.innerHTML = `
+    <div class="product-card">
+      <div class="product-header" onclick="togglePanel('panel-whole', this)">
+        <div class="product-name">
+          🐓 Whole Chicken
+          <span class="badge ${badgeClass}">${label}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:20px">
+          <div class="product-stats">
+            <div class="stat">
+              <div class="stat-label">Profit</div>
+              <div class="stat-value profit">${fmt(soldProfit)}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Remaining</div>
+              <div class="stat-value remaining">${remainingPcs} pcs · ${fmtKg(remainingKg)}</div>
+            </div>
+            <div class="stat">
+              <div class="stat-label">Sold</div>
+              <div class="stat-value">${w.soldPcs} pcs · ${fmtKg(soldKg)}</div>
+            </div>
+          </div>
+          <div class="toggle-arrow" id="arrow-whole">▼</div>
+        </div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-labels">
+          <span>Sold ${w.soldPcs} of ${w.totalPcs} pcs · ${fmtKg(soldKg)} of ${fmtKg(w.totalKg)}</span>
+          <span>${pct.toFixed(0)}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="input-panel" id="panel-whole">
+        <div class="input-row">
+          <div class="input-group">
+            <label>Sold (pcs)</label>
+            <input type="number" id="whole-soldpcs" value="${w.soldPcs}" min="0" max="${w.totalPcs}" step="1" placeholder="0">
+          </div>
+          <div class="input-group">
+            <label>Total (pcs)</label>
+            <input type="number" id="whole-totalpcs" value="${w.totalPcs}" min="1" step="1">
+          </div>
+          <div class="input-group">
+            <label>Total (kg)</label>
+            <input type="number" id="whole-totalkg" value="${w.totalKg}" min="0" step="0.01">
+          </div>
+          <div class="input-group">
+            <label>Buy/kg</label>
+            <input type="number" id="whole-buy" value="${w.buyPkg}" min="0" step="1">
+          </div>
+          <div class="input-group">
+            <label>Sell/kg</label>
+            <input type="number" id="whole-sell" value="${w.sellPkg}" min="0" step="1">
+          </div>
+          <button class="btn btn-primary" onclick="updateWhole()">Apply</button>
+          <button class="btn btn-ghost" onclick="togglePanel('panel-whole')">Close</button>
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--muted);">
+          ≈ ${fmtKg(kgPerPc)} per piece &nbsp;·&nbsp; Revenue/pc: ${fmt(kgPerPc * w.sellPkg)} &nbsp;·&nbsp; Cost/pc: ${fmt(kgPerPc * w.buyPkg)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── RENDER SUMMARY ────────────────────────────────────
+function renderSummary() {
+  // Parts
+  const partsCap = state.parts.reduce((a,p) => a + p.kg * p.buyPkg, 0);
+  const partsSoldRev = state.parts.reduce((a,p) => a + p.soldKg * p.sellPkg, 0);
+  const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
+
+  // Whole
+  const w = state.whole;
+  const kgPerPc = w.totalKg / w.totalPcs;
+  const wholeSoldKg = w.soldPcs * kgPerPc;
+  const wholeCap = w.totalKg * w.buyPkg;
+  const wholeSoldRev = wholeSoldKg * w.sellPkg;
+  const wholeSoldProfit = wholeSoldRev - (wholeSoldKg * w.buyPkg);
+  const totalPotentialRevWhole = w.totalKg * w.sellPkg;
+
+  const totalCap = partsCap + wholeCap;
+  const totalRev = partsSoldRev + wholeSoldRev;
+  const totalProfit = partsSoldProfit + wholeSoldProfit;
+
+  const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
+
+  document.getElementById('totalCap').textContent = fmt(totalCap);
+  document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
+  document.getElementById('totalRev').textContent = fmt(totalRev);
+  document.getElementById('totalRevSub').textContent = `of ${fmt(totalPotentialRev)} potential`;
+  document.getElementById('totalPro').textContent = fmt(totalProfit);
+  document.getElementById('totalProSub').textContent = totalProfit > 0 ? '↑ Based on sold items' : 'No sales yet';
+}
+
+function render() {
+  renderParts();
+  renderWhole();
+  renderSummary();
+}
+
+// ── INTERACTIONS ──────────────────────────────────────
+function togglePanel(id, headerEl) {
+  const panel = document.getElementById(id);
+  const isOpen = panel.classList.contains('open');
+  // Close all panels
+  document.querySelectorAll('.input-panel').forEach(p => p.classList.remove('open'));
+  document.querySelectorAll('.toggle-arrow').forEach(a => a.classList.remove('open'));
+  if (!isOpen) {
+    panel.classList.add('open');
+    const arrowId = id.replace('panel-', 'arrow-');
+    const arrow = document.getElementById(arrowId);
+    if (arrow) arrow.classList.add('open');
+  }
+}
+
+function updatePart(id) {
+  const idx = state.parts.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const soldKg = parseFloat(document.getElementById('sold-'+id).value) || 0;
+  const buyPkg = parseFloat(document.getElementById('buy-'+id).value) || 0;
+  const sellPkg = parseFloat(document.getElementById('sell-'+id).value) || 0;
+  const totalKg = parseFloat(document.getElementById('total-'+id).value) || 0;
+  state.parts[idx].soldKg = Math.min(soldKg, totalKg);
+  state.parts[idx].buyPkg = buyPkg;
+  state.parts[idx].sellPkg = sellPkg;
+  state.parts[idx].kg = totalKg;
+  render();
+  // Reopen panel after re-render
+  setTimeout(() => togglePanel('panel-'+id), 10);
+}
+
+function updateWhole() {
+  const soldPcs = parseInt(document.getElementById('whole-soldpcs').value) || 0;
+  const totalPcs = parseInt(document.getElementById('whole-totalpcs').value) || 1;
+  const totalKg = parseFloat(document.getElementById('whole-totalkg').value) || 0;
+  const buyPkg = parseFloat(document.getElementById('whole-buy').value) || 0;
+  const sellPkg = parseFloat(document.getElementById('whole-sell').value) || 0;
+  state.whole.soldPcs = Math.min(soldPcs, totalPcs);
+  state.whole.totalPcs = totalPcs;
+  state.whole.totalKg = totalKg;
+  state.whole.buyPkg = buyPkg;
+  state.whole.sellPkg = sellPkg;
+  render();
+  setTimeout(() => togglePanel('panel-whole'), 10);
+}
+
+// ── DATE ──────────────────────────────────────────────
+document.getElementById('dateTag').textContent = new Date().toLocaleDateString('en-PH', {
+  weekday:'short', year:'numeric', month:'short', day:'numeric'
+});
+
+// ── INIT ──────────────────────────────────────────────
+render();
+</script>
+</body>
+</html>
