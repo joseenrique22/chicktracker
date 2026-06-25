@@ -390,19 +390,30 @@ const wholeSellPkg = 220;
 const wholeTotalKg = 14.46;
 const wholeTotalPcs = 15;
 
-// ── STATE ─────────────────────────────────────────────
-function loadState() {
+// ── FIREBASE SYNC ─────────────────────────────────────
+const FB_URL = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/data.json';
+
+async function cloudLoad() {
   try {
-    const saved = localStorage.getItem('chicktrack');
-    if (saved) return JSON.parse(saved);
+    const res = await fetch(FB_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (data) return data;
+    }
   } catch(e) {}
   return null;
 }
 
+let saveTimer = null;
 function saveState() {
   localStorage.setItem('chicktrack', JSON.stringify(state));
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    fetch(FB_URL, { method: 'PUT', body: JSON.stringify(state) }).catch(() => {});
+  }, 800);
 }
 
+// ── STATE ─────────────────────────────────────────────
 const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0 })),
   whole: {
@@ -414,8 +425,9 @@ const defaultState = {
   },
 };
 
-const saved = loadState();
-const state = saved || defaultState;
+let localSaved = null;
+try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
+const state = localSaved || JSON.parse(JSON.stringify(defaultState));
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -679,6 +691,13 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 
 // ── INIT ──────────────────────────────────────────────
 render();
+cloudLoad().then(cloudData => {
+  if (cloudData) {
+    Object.assign(state, cloudData);
+    localStorage.setItem('chicktrack', JSON.stringify(state));
+    render();
+  }
+});
 </script>
 </body>
 </html>
