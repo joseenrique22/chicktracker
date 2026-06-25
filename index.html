@@ -289,6 +289,68 @@
   }
   .piece-item.sold .piece-price { color: var(--green); }
   .piece-item.sold .piece-label { color: var(--green); opacity: 0.7; }
+  .piece-item.utang {
+    background: rgba(255,165,0,0.10);
+    border-color: rgba(255,165,0,0.4);
+  }
+  .piece-item.utang .piece-price { color: #f5a623; }
+  .piece-item.utang .piece-label { color: #f5a623; opacity: 0.85; }
+  .utang-tag {
+    position: absolute;
+    top: 4px; right: 5px;
+    font-size: 8px;
+    color: #f5a623;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  /* PIECE MODAL */
+  .piece-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.55);
+    z-index: 999;
+    align-items: center;
+    justify-content: center;
+  }
+  .piece-modal-overlay.open { display: flex; }
+  .piece-modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px 24px 18px;
+    min-width: 240px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .piece-modal-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+  .piece-modal-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .piece-modal-btns { display: flex; gap: 10px; justify-content: center; }
+  .pm-btn {
+    flex: 1;
+    padding: 11px 6px;
+    border-radius: 10px;
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .pm-btn:hover { opacity: 0.85; }
+  .pm-sold { background: var(--green); color: #fff; }
+  .pm-utang { background: #f5a623; color: #fff; }
+  .pm-cancel { background: var(--surface2); color: var(--muted); font-size: 12px; margin-top: 12px; width: 100%; padding: 8px; border-radius: 8px; border: none; cursor: pointer; }
+  .pm-reset { background: rgba(255,80,80,0.15); color: #ff5252; font-size: 12px; margin-top: 6px; width: 100%; padding: 8px; border-radius: 8px; border: none; cursor: pointer; }
 
   .piece-price {
     font-family: 'Space Grotesk', sans-serif;
@@ -360,6 +422,20 @@
 </style>
 </head>
 <body>
+
+<!-- PIECE STATUS MODAL -->
+<div class="piece-modal-overlay" id="pieceModalOverlay" onclick="closePieceModal(event)">
+  <div class="piece-modal">
+    <div class="piece-modal-title" id="pieceModalTitle">Piece #1</div>
+    <div class="piece-modal-sub" id="pieceModalSub">₱210.00 · 0.955 kg</div>
+    <div class="piece-modal-btns">
+      <button class="pm-btn pm-sold" onclick="setPieceStatus('sold')">✓ Sold</button>
+      <button class="pm-btn pm-utang" onclick="setPieceStatus('utang')">📋 Utang</button>
+    </div>
+    <button class="pm-reset" id="pieceModalReset" onclick="setPieceStatus(null)" style="display:none">↩ Mark as Unsold</button>
+    <button class="pm-cancel" onclick="closePieceModal()">Cancel</button>
+  </div>
+</div>
 
 <header>
   <div class="logo">🐔 Chick<span>Track</span></div>
@@ -461,7 +537,7 @@ function saveState() {
 // ── STATE ─────────────────────────────────────────────
 const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0 })),
-  whole: { sold: wholePieces.map(() => false) },
+  whole: { status: wholePieces.map(() => null) },
   expenses: [],
 };
 
@@ -557,25 +633,36 @@ function renderParts() {
 // ── RENDER WHOLE CHICKEN ──────────────────────────────
 function renderWhole() {
   const container = document.getElementById('whole-section');
-  const sold = state.whole.sold || wholePieces.map(() => false);
-  const soldCount = sold.filter(Boolean).length;
+  const status = getWholeStatus();
+  const soldCount = status.filter(s => s === 'sold').length;
+  const utangCount = status.filter(s => s === 'utang').length;
+  const doneCount = soldCount + utangCount;
   const totalCount = wholePieces.length;
-  const soldRev = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.sell : 0), 0);
-  const soldCost = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.cost : 0), 0);
-  const soldProfit = soldRev - soldCost;
-  const soldKg = wholePieces.reduce((a, p, i) => a + (sold[i] ? p.kg : 0), 0);
-  const remainingKg = wholePieces.reduce((a, p, i) => a + (!sold[i] ? p.kg : 0), 0);
-  const pct = Math.min(100, (soldCount / totalCount) * 100);
+  const soldRev = wholePieces.reduce((a, p, i) => a + (status[i] === 'sold' ? p.sell : 0), 0);
+  const utangRev = wholePieces.reduce((a, p, i) => a + (status[i] === 'utang' ? p.sell : 0), 0);
+  const soldCost = wholePieces.reduce((a, p, i) => a + (status[i] !== null ? p.cost : 0), 0);
+  const soldProfit = soldRev - wholePieces.reduce((a, p, i) => a + (status[i] === 'sold' ? p.cost : 0), 0);
+  const soldKg = wholePieces.reduce((a, p, i) => a + (status[i] !== null ? p.kg : 0), 0);
+  const remainingKg = wholePieces.reduce((a, p, i) => a + (status[i] === null ? p.kg : 0), 0);
+  const pct = Math.min(100, (doneCount / totalCount) * 100);
   const [label, badgeClass] = soldBadge(pct);
 
-  const pieceTiles = wholePieces.map((p, i) => `
-    <div class="piece-item ${sold[i] ? 'sold' : ''}" onclick="togglePiece(${i})">
-      ${sold[i] ? '<span class="sold-tag">✓</span>' : ''}
+  const pieceTiles = wholePieces.map((p, i) => {
+    const s = status[i];
+    const cls = s === 'sold' ? 'sold' : s === 'utang' ? 'utang' : '';
+    const tag = s === 'sold' ? '<span class="sold-tag">✓</span>'
+              : s === 'utang' ? '<span class="utang-tag">UTANG</span>' : '';
+    const profColor = s === 'sold' ? 'var(--green)' : s === 'utang' ? '#f5a623' : 'var(--accent)';
+    return `
+    <div class="piece-item ${cls}" onclick="openPieceModal(${i})">
+      ${tag}
       <div class="piece-price">${fmt(p.sell)}</div>
       <div class="piece-label">#${i+1} · ${p.kg}kg</div>
-      <div class="piece-label" style="color:${sold[i] ? 'var(--green)' : 'var(--accent)'}">+${fmt(p.sell - p.cost)}</div>
-    </div>
-  `).join('');
+      <div class="piece-label" style="color:${profColor}">+${fmt(p.sell - p.cost)}</div>
+    </div>`;
+  }).join('');
+
+  const utangLine = utangCount > 0 ? `<div class="stat"><div class="stat-label">Utang</div><div class="stat-value" style="color:#f5a623">${utangCount} pcs · ${fmt(utangRev)}</div></div>` : '';
 
   container.innerHTML = `
     <div class="product-card">
@@ -583,13 +670,14 @@ function renderWhole() {
         <div class="product-name">🐓 Whole Chicken <span class="badge ${badgeClass}">${label}</span></div>
         <div class="product-stats">
           <div class="stat"><div class="stat-label">Profit</div><div class="stat-value profit">${fmt(soldProfit)}</div></div>
-          <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${totalCount - soldCount} pcs · ${fmtKg(remainingKg)}</div></div>
-          <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${soldCount} pcs · ${fmtKg(soldKg)}</div></div>
+          <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${totalCount - doneCount} pcs · ${fmtKg(remainingKg)}</div></div>
+          <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${soldCount} pcs · ${fmtKg(wholePieces.reduce((a,p,i)=>a+(status[i]==='sold'?p.kg:0),0))}</div></div>
+          ${utangLine}
         </div>
       </div>
       <div class="progress-wrap">
         <div class="progress-labels">
-          <span>Sold ${soldCount} of ${totalCount} pcs · ${fmtKg(soldKg)} of ${fmtKg(wholePieces.reduce((a,p)=>a+p.kg,0))}</span>
+          <span>${soldCount} sold · ${utangCount} utang · ${totalCount - doneCount} remaining</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -607,10 +695,10 @@ function renderSummary() {
   const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
 
   // Whole
-  const sold = state.whole.sold || wholePieces.map(() => false);
+  const wst = getWholeStatus();
   const wholeCap = wholePieces.reduce((a,p) => a + p.cost, 0);
-  const wholeSoldRev = wholePieces.reduce((a,p,i) => a + (sold[i] ? p.sell : 0), 0);
-  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (sold[i] ? p.sell - p.cost : 0), 0);
+  const wholeSoldRev = wholePieces.reduce((a,p,i) => a + (wst[i] === 'sold' ? p.sell : 0), 0);
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (wst[i] === 'sold' ? p.sell - p.cost : 0), 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
   const totalCap = partsCap + wholeCap;
@@ -721,18 +809,44 @@ function updatePart(id) {
   setTimeout(() => togglePanel('panel-'+id), 10);
 }
 
-function togglePiece(i) {
-  if (!state.whole.sold) state.whole.sold = wholePieces.map(() => false);
-  state.whole.sold[i] = !state.whole.sold[i];
-  saveState();
-  renderWhole();
-  renderSummary();
+function getWholeStatus() {
+  // migrate old boolean sold array
+  if (state.whole.sold && !state.whole.status) {
+    state.whole.status = state.whole.sold.map(v => v ? 'sold' : null);
+    delete state.whole.sold;
+  }
+  if (!state.whole.status) state.whole.status = wholePieces.map(() => null);
+  return state.whole.status;
+}
+
+let _modalIdx = null;
+function openPieceModal(i) {
+  _modalIdx = i;
+  const p = wholePieces[i];
+  const s = getWholeStatus()[i];
+  document.getElementById('pieceModalTitle').textContent = `Piece #${i+1}`;
+  document.getElementById('pieceModalSub').textContent = `${fmt(p.sell)} · ${p.kg} kg · Profit +${fmt(p.sell - p.cost)}`;
+  document.getElementById('pieceModalReset').style.display = s ? 'block' : 'none';
+  document.getElementById('pieceModalOverlay').classList.add('open');
+}
+function closePieceModal(e) {
+  if (e && e.target !== document.getElementById('pieceModalOverlay')) return;
+  document.getElementById('pieceModalOverlay').classList.remove('open');
+  _modalIdx = null;
+}
+function setPieceStatus(s) {
+  if (_modalIdx === null) return;
+  getWholeStatus();
+  state.whole.status[_modalIdx] = s;
+  document.getElementById('pieceModalOverlay').classList.remove('open');
+  _modalIdx = null;
+  saveState(); renderWhole(); renderSummary();
 }
 
 function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
   state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
-  state.whole = { sold: wholePieces.map(() => false) };
+  state.whole = { status: wholePieces.map(() => null) };
   state.expenses = [];
   saveState();
   render();
