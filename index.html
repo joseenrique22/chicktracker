@@ -308,6 +308,33 @@
     font-weight: 600;
   }
 
+  /* EXPENSES */
+  .expense-list { padding: 0 18px 4px; }
+  .expense-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border); gap: 10px;
+  }
+  .expense-row:last-child { border-bottom: none; }
+  .expense-name { font-size: 13px; color: var(--text); flex: 1; }
+  .expense-amount { font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--red); }
+  .expense-del {
+    background: none; border: none; color: var(--muted); cursor: pointer;
+    font-size: 16px; line-height: 1; padding: 0 4px; transition: color 0.15s;
+  }
+  .expense-del:hover { color: var(--red); }
+  .expense-add {
+    display: flex; gap: 8px; padding: 12px 18px;
+    border-top: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .expense-add input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'Inter', sans-serif; font-size: 13px;
+    padding: 7px 10px; outline: none; transition: border-color 0.2s;
+  }
+  .expense-add input:focus { border-color: var(--accent); }
+  .expense-add input.exp-name { flex: 2; min-width: 120px; }
+  .expense-add input.exp-amt  { flex: 1; min-width: 90px; }
+
   /* TOGGLE ARROW */
   .toggle-arrow {
     font-size: 12px;
@@ -373,7 +400,12 @@
   <div id="whole-section"></div>
 </div>
 
-<div class="footer-note">Tap any row to adjust · Whole chicken tracked by pcs sold</div>
+<div class="section">
+  <div class="section-title">Expenses</div>
+  <div id="expenses-section"></div>
+</div>
+
+<div class="footer-note">Tap any part row to adjust · Tap piece to mark sold · ☁️ Syncs across devices</div>
 
 <script>
 // ── DATA ──────────────────────────────────────────────
@@ -430,6 +462,7 @@ function saveState() {
 const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0 })),
   whole: { sold: wholePieces.map(() => false) },
+  expenses: [],
 };
 
 let localSaved = null;
@@ -586,21 +619,78 @@ function renderSummary() {
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
 
+  const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
+  const netProfit = totalProfit - totalExpenses;
+
   document.getElementById('totalCap').textContent = fmt(totalCap);
   document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
   document.getElementById('totalRev').textContent = fmt(totalRev);
   document.getElementById('totalRevSub').textContent = `of ${fmt(totalPotentialRev)} potential`;
-  document.getElementById('totalPro').textContent = fmt(totalProfit);
-  document.getElementById('totalProSub').textContent = totalProfit > 0 ? '↑ Based on sold items' : 'No sales yet';
+  document.getElementById('totalPro').textContent = fmt(netProfit);
+  document.getElementById('totalProSub').textContent = totalExpenses > 0
+    ? `Gross ₱${totalProfit.toFixed(2)} − Exp ₱${totalExpenses.toFixed(2)}`
+    : (netProfit > 0 ? '↑ Based on sold items' : 'No sales yet');
+}
+
+function renderExpenses() {
+  const container = document.getElementById('expenses-section');
+  const expenses = state.expenses || [];
+  const total = expenses.reduce((a, e) => a + e.amount, 0);
+
+  const rows = expenses.length
+    ? expenses.map((e, i) => `
+        <div class="expense-row">
+          <span class="expense-name">${e.name}</span>
+          <span class="expense-amount">−${fmt(e.amount)}</span>
+          <button class="expense-del" onclick="deleteExpense(${i})">×</button>
+        </div>`).join('')
+    : '<div style="padding:10px 0;font-size:12px;color:var(--muted);">No expenses yet</div>';
+
+  container.innerHTML = `
+    <div class="product-card">
+      <div class="product-header" style="cursor:default">
+        <div class="product-name">💸 Expenses</div>
+        <div class="stat">
+          <div class="stat-label">Total</div>
+          <div class="stat-value" style="color:var(--red)">${fmt(total)}</div>
+        </div>
+      </div>
+      <div class="expense-list">${rows}</div>
+      <div class="expense-add">
+        <input class="exp-name" id="exp-name" type="text" placeholder="Expense name (e.g. Transport)">
+        <input class="exp-amt"  id="exp-amt"  type="number" placeholder="Amount" min="0" step="1">
+        <button class="btn btn-primary" style="padding:7px 14px" onclick="addExpense()">Add</button>
+      </div>
+    </div>
+  `;
 }
 
 function render() {
   renderParts();
   renderWhole();
+  renderExpenses();
   renderSummary();
 }
 
 // ── INTERACTIONS ──────────────────────────────────────
+function addExpense() {
+  const name = document.getElementById('exp-name').value.trim();
+  const amount = parseFloat(document.getElementById('exp-amt').value) || 0;
+  if (!name || amount <= 0) return;
+  if (!state.expenses) state.expenses = [];
+  state.expenses.push({ name, amount });
+  saveState();
+  renderExpenses();
+  renderSummary();
+}
+
+function deleteExpense(i) {
+  state.expenses.splice(i, 1);
+  saveState();
+  renderExpenses();
+  renderSummary();
+}
+
 function togglePanel(id, headerEl) {
   const panel = document.getElementById(id);
   const isOpen = panel.classList.contains('open');
@@ -643,6 +733,7 @@ function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
   state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
   state.whole = { sold: wholePieces.map(() => false) };
+  state.expenses = [];
   saveState();
   render();
 }
