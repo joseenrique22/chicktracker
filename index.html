@@ -405,6 +405,59 @@
   }
   .toggle-arrow.open { transform: rotate(180deg); }
 
+  /* SPLITS */
+  .split-list { padding: 0 18px 4px; }
+  .split-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border); gap: 10px;
+  }
+  .split-row:last-child { border-bottom: none; }
+  .split-note { font-size: 13px; color: var(--text); flex: 1; }
+  .split-amount { font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: #a78bfa; }
+  .split-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; line-height: 1; padding: 0 4px; transition: color 0.15s; }
+  .split-del:hover { color: var(--red); }
+  .split-add {
+    display: flex; gap: 8px; padding: 12px 18px;
+    border-top: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .split-add input {
+    flex: 1; min-width: 100px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 7px 12px; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .split-add input:focus { border-color: #a78bfa; }
+  .split-remaining-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 18px 12px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px;
+  }
+  .split-remaining-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .split-remaining-value { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--green); }
+
+  /* APPLY BTNS */
+  .apply-btns { display: flex; gap: 8px; flex-wrap: wrap; align-self: flex-end; }
+  .btn-sold { background: var(--green); color: #fff; }
+  .btn-utang-part { background: #f5a623; color: #000; }
+
+  /* QUICK ENTRY */
+  .quick-entry {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 18px 12px; border-top: 1px solid var(--border); flex-wrap: wrap;
+  }
+  .quick-entry-label { font-size: 11px; color: var(--muted); white-space: nowrap; }
+  .quick-kg {
+    width: 80px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 6px 10px; font-size: 14px;
+    font-family: 'Space Grotesk', sans-serif; outline: none; transition: border-color 0.2s;
+  }
+  .quick-kg:focus { border-color: var(--accent); }
+  .qbtn {
+    padding: 6px 14px; border-radius: 8px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s;
+  }
+  .qbtn:hover { opacity: 0.85; }
+  .qbtn-sold { background: var(--green); color: #fff; }
+  .qbtn-utang { background: #f5a623; color: #000; }
+
   /* FOOTER NOTE */
   .footer-note {
     max-width: 960px;
@@ -481,7 +534,12 @@
   <div id="expenses-section"></div>
 </div>
 
-<div class="footer-note">Tap any part row to adjust · Tap piece to mark sold · ☁️ Syncs across devices</div>
+<div class="section">
+  <div class="section-title">Profit Split</div>
+  <div id="splits-section"></div>
+</div>
+
+<div class="footer-note">Tap any part row to adjust · Tap piece to mark sold/utang · ☁️ Syncs across devices</div>
 
 <script>
 // ── DATA ──────────────────────────────────────────────
@@ -536,9 +594,10 @@ function saveState() {
 
 // ── STATE ─────────────────────────────────────────────
 const defaultState = {
-  parts: parts.map(p => ({ ...p, soldKg: 0 })),
+  parts: parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 })),
   whole: { status: wholePieces.map(() => null) },
   expenses: [],
+  splits: [],
 };
 
 let localSaved = null;
@@ -561,13 +620,17 @@ function renderParts() {
   container.innerHTML = '';
 
   state.parts.forEach((p, idx) => {
+    const utangKg = p.utangKg || 0;
     const capital = p.kg * p.buyPkg;
-    const totalRev = p.kg * p.sellPkg;
     const soldRev = p.soldKg * p.sellPkg;
     const soldProfit = p.soldKg * (p.sellPkg - p.buyPkg);
-    const remaining = Math.max(0, p.kg - p.soldKg);
-    const pct = Math.min(100, (p.soldKg / p.kg) * 100);
+    const doneKg = p.soldKg + utangKg;
+    const remaining = Math.max(0, p.kg - doneKg);
+    const pct = Math.min(100, (doneKg / p.kg) * 100);
     const [label, badgeClass] = soldBadge(pct);
+    const utangStat = utangKg > 0
+      ? `<div class="stat"><div class="stat-label">Utang</div><div class="stat-value" style="color:#f5a623">${fmtKg(utangKg)}</div></div>`
+      : '';
 
     const div = document.createElement('div');
     div.className = 'product-card';
@@ -580,34 +643,36 @@ function renderParts() {
         </div>
         <div style="display:flex;align-items:center;gap:20px">
           <div class="product-stats">
-            <div class="stat">
-              <div class="stat-label">Profit</div>
-              <div class="stat-value profit">${fmt(soldProfit)}</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Remaining</div>
-              <div class="stat-value remaining">${fmtKg(remaining)}</div>
-            </div>
-            <div class="stat">
-              <div class="stat-label">Sold</div>
-              <div class="stat-value">${fmtKg(p.soldKg)}</div>
-            </div>
+            <div class="stat"><div class="stat-label">Profit</div><div class="stat-value profit">${fmt(soldProfit)}</div></div>
+            <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${fmtKg(remaining)}</div></div>
+            <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${fmtKg(p.soldKg)}</div></div>
+            ${utangStat}
           </div>
           <div class="toggle-arrow" id="arrow-${p.id}">▼</div>
         </div>
       </div>
       <div class="progress-wrap">
         <div class="progress-labels">
-          <span>Sold ${fmtKg(p.soldKg)} of ${fmtKg(p.kg)}</span>
+          <span>${fmtKg(p.soldKg)} sold${utangKg > 0 ? ` · ${fmtKg(utangKg)} utang` : ''} of ${fmtKg(p.kg)}</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div class="quick-entry">
+        <span class="quick-entry-label">Quick add:</span>
+        <input class="quick-kg" id="qkg-${p.id}" type="number" min="0" step="0.1" placeholder="kg">
+        <button class="qbtn qbtn-sold" onclick="quickAddPart('${p.id}','sold')">✓ Sold</button>
+        <button class="qbtn qbtn-utang" onclick="quickAddPart('${p.id}','utang')">📋 Utang</button>
       </div>
       <div class="input-panel" id="panel-${p.id}">
         <div class="input-row">
           <div class="input-group">
             <label>Sold (kg)</label>
-            <input type="number" id="sold-${p.id}" value="${p.soldKg}" min="0" max="${p.kg}" step="0.1" placeholder="0.00">
+            <input type="number" id="sold-${p.id}" value="${p.soldKg}" min="0" step="0.1" placeholder="0.00">
+          </div>
+          <div class="input-group">
+            <label>Utang (kg)</label>
+            <input type="number" id="utang-${p.id}" value="${utangKg}" min="0" step="0.1" placeholder="0.00">
           </div>
           <div class="input-group">
             <label>Buy/kg</label>
@@ -621,8 +686,10 @@ function renderParts() {
             <label>Total kg</label>
             <input type="number" id="total-${p.id}" value="${p.kg}" min="0" step="0.1">
           </div>
-          <button class="btn btn-primary" onclick="updatePart('${p.id}')">Apply</button>
-          <button class="btn btn-ghost" onclick="togglePanel('panel-${p.id}')">Close</button>
+          <div class="apply-btns">
+            <button class="btn btn-sold" onclick="updatePart('${p.id}')">✓ Apply</button>
+            <button class="btn btn-ghost" onclick="togglePanel('panel-${p.id}')">Close</button>
+          </div>
         </div>
       </div>
     `;
@@ -708,16 +775,25 @@ function renderSummary() {
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
 
   const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
+  const totalSplits = (state.splits || []).reduce((a, s) => a + s.amount, 0);
   const netProfit = totalProfit - totalExpenses;
+  const unsplitProfit = netProfit - totalSplits;
 
   document.getElementById('totalCap').textContent = fmt(totalCap);
   document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
   document.getElementById('totalRev').textContent = fmt(totalRev);
   document.getElementById('totalRevSub').textContent = `of ${fmt(totalPotentialRev)} potential`;
-  document.getElementById('totalPro').textContent = fmt(netProfit);
-  document.getElementById('totalProSub').textContent = totalExpenses > 0
-    ? `Gross ₱${totalProfit.toFixed(2)} − Exp ₱${totalExpenses.toFixed(2)}`
-    : (netProfit > 0 ? '↑ Based on sold items' : 'No sales yet');
+  document.getElementById('totalPro').textContent = fmt(unsplitProfit);
+  let proSub = '';
+  if (totalExpenses > 0 || totalSplits > 0) {
+    const parts2 = [];
+    if (totalExpenses > 0) parts2.push(`Exp −₱${totalExpenses.toFixed(2)}`);
+    if (totalSplits > 0) parts2.push(`Split −₱${totalSplits.toFixed(2)}`);
+    proSub = `Gross ₱${totalProfit.toFixed(2)} · ${parts2.join(' · ')}`;
+  } else {
+    proSub = unsplitProfit > 0 ? '↑ Based on sold items' : 'No sales yet';
+  }
+  document.getElementById('totalProSub').textContent = proSub;
 }
 
 function renderExpenses() {
@@ -753,10 +829,61 @@ function renderExpenses() {
   `;
 }
 
+function renderSplits() {
+  const container = document.getElementById('splits-section');
+  const splits = state.splits || [];
+  const totalSplits = splits.reduce((a, s) => a + s.amount, 0);
+
+  // compute current net profit for remaining display
+  const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
+  const wst2 = getWholeStatus();
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (wst2[i] === 'sold' ? p.sell - p.cost : 0), 0);
+  const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
+  const netProfit = partsSoldProfit + wholeSoldProfit - totalExpenses;
+  const remaining = netProfit - totalSplits;
+
+  const rows = splits.length
+    ? splits.map((s, i) => `
+        <div class="split-row">
+          <span class="split-note">${s.note || 'Split'}</span>
+          <span class="split-amount">−${fmt(s.amount)}</span>
+          <button class="split-del" onclick="deleteSplit(${i})">×</button>
+        </div>`).join('')
+    : '<div style="padding:10px 0;font-size:12px;color:var(--muted);">No splits recorded yet</div>';
+
+  container.innerHTML = `
+    <div class="product-card">
+      <div class="product-header" style="cursor:default">
+        <div class="product-name">🤝 Profit Split</div>
+        <div class="stat">
+          <div class="stat-label">Total Split</div>
+          <div class="stat-value" style="color:#a78bfa">${fmt(totalSplits)}</div>
+        </div>
+      </div>
+      <div class="split-list">${rows}</div>
+      <div class="split-remaining-bar">
+        <div>
+          <div class="split-remaining-label">Remaining (Unsplit)</div>
+          <div class="split-remaining-value">${fmt(Math.max(0, remaining))}</div>
+        </div>
+        <div style="font-size:11px;color:var(--muted);text-align:right">
+          Net ₱${netProfit.toFixed(2)}<br>Split ₱${totalSplits.toFixed(2)}
+        </div>
+      </div>
+      <div class="split-add">
+        <input id="split-note" type="text" placeholder="Note (e.g. Week 1 split)">
+        <input id="split-amt" type="number" placeholder="Amount" min="0" step="1">
+        <button class="btn btn-primary" style="padding:7px 14px;background:#a78bfa;color:#fff" onclick="addSplit()">Record Split</button>
+      </div>
+    </div>
+  `;
+}
+
 function render() {
   renderParts();
   renderWhole();
   renderExpenses();
+  renderSplits();
   renderSummary();
 }
 
@@ -779,6 +906,24 @@ function deleteExpense(i) {
   renderSummary();
 }
 
+function addSplit() {
+  const note = document.getElementById('split-note').value.trim();
+  const amount = parseFloat(document.getElementById('split-amt').value) || 0;
+  if (amount <= 0) return;
+  if (!state.splits) state.splits = [];
+  state.splits.push({ note: note || 'Split', amount });
+  saveState();
+  renderSplits();
+  renderSummary();
+}
+
+function deleteSplit(i) {
+  state.splits.splice(i, 1);
+  saveState();
+  renderSplits();
+  renderSummary();
+}
+
 function togglePanel(id, headerEl) {
   const panel = document.getElementById(id);
   const isOpen = panel.classList.contains('open');
@@ -793,14 +938,31 @@ function togglePanel(id, headerEl) {
   }
 }
 
+function quickAddPart(id, type) {
+  const idx = state.parts.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const kg = parseFloat(document.getElementById('qkg-'+id).value) || 0;
+  if (kg <= 0) return;
+  const p = state.parts[idx];
+  const avail = Math.max(0, p.kg - p.soldKg - (p.utangKg || 0));
+  const add = Math.min(kg, avail);
+  if (type === 'sold') p.soldKg += add;
+  else p.utangKg = (p.utangKg || 0) + add;
+  saveState();
+  renderParts();
+  renderSummary();
+}
+
 function updatePart(id) {
   const idx = state.parts.findIndex(p => p.id === id);
   if (idx === -1) return;
   const soldKg = parseFloat(document.getElementById('sold-'+id).value) || 0;
+  const utangKg = parseFloat(document.getElementById('utang-'+id).value) || 0;
   const buyPkg = parseFloat(document.getElementById('buy-'+id).value) || 0;
   const sellPkg = parseFloat(document.getElementById('sell-'+id).value) || 0;
   const totalKg = parseFloat(document.getElementById('total-'+id).value) || 0;
   state.parts[idx].soldKg = Math.min(soldKg, totalKg);
+  state.parts[idx].utangKg = Math.min(utangKg, Math.max(0, totalKg - soldKg));
   state.parts[idx].buyPkg = buyPkg;
   state.parts[idx].sellPkg = sellPkg;
   state.parts[idx].kg = totalKg;
@@ -845,9 +1007,10 @@ function setPieceStatus(s) {
 
 function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
-  state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
+  state.parts = parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 }));
   state.whole = { status: wholePieces.map(() => null) };
   state.expenses = [];
+  state.splits = [];
   saveState();
   render();
 }
