@@ -660,7 +660,7 @@ function renderParts() {
       </div>
       <div class="quick-entry">
         <span class="quick-entry-label">Quick add:</span>
-        <input class="quick-kg" id="qkg-${p.id}" type="number" min="0" step="0.1" placeholder="kg">
+        <input class="quick-kg" id="qkg-${p.id}" type="number" min="0" step="1" placeholder="₱ amount">
         <button class="qbtn qbtn-sold" onclick="quickAddPart('${p.id}','sold')">✓ Sold</button>
         <button class="qbtn qbtn-utang" onclick="quickAddPart('${p.id}','utang')">📋 Utang</button>
       </div>
@@ -941,13 +941,16 @@ function togglePanel(id, headerEl) {
 function quickAddPart(id, type) {
   const idx = state.parts.findIndex(p => p.id === id);
   if (idx === -1) return;
-  const kg = parseFloat(document.getElementById('qkg-'+id).value) || 0;
-  if (kg <= 0) return;
+  const amount = parseFloat(document.getElementById('qkg-'+id).value) || 0;
+  if (amount <= 0) return;
   const p = state.parts[idx];
+  if (!p.sellPkg) return;
+  const kg = amount / p.sellPkg;
   const avail = Math.max(0, p.kg - p.soldKg - (p.utangKg || 0));
   const add = Math.min(kg, avail);
   if (type === 'sold') p.soldKg += add;
   else p.utangKg = (p.utangKg || 0) + add;
+  document.getElementById('qkg-'+id).value = '';
   saveState();
   renderParts();
   renderSummary();
