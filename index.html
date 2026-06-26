@@ -347,8 +347,13 @@
     transition: opacity 0.15s;
   }
   .pm-btn:hover { opacity: 0.85; }
+  .pm-cash  { background: #4f8ef7; color: #fff; }
   .pm-sold { background: var(--green); color: #fff; }
   .pm-utang { background: #f5a623; color: #fff; }
+  .piece-item.cash { background: rgba(79,142,247,0.10); border-color: rgba(79,142,247,0.35); }
+  .piece-item.cash .piece-price { color: #4f8ef7; }
+  .piece-item.cash .piece-label { color: #4f8ef7; opacity: 0.85; }
+  .cash-tag { position: absolute; top: 4px; right: 5px; font-size: 8px; color: #4f8ef7; font-weight: 700; letter-spacing: 0.3px; }
   .pm-cancel { background: var(--surface2); color: var(--muted); font-size: 12px; margin-top: 12px; width: 100%; padding: 8px; border-radius: 8px; border: none; cursor: pointer; }
   .pm-reset { background: rgba(255,80,80,0.15); color: #ff5252; font-size: 12px; margin-top: 6px; width: 100%; padding: 8px; border-radius: 8px; border: none; cursor: pointer; }
 
@@ -481,9 +486,12 @@
   <div class="piece-modal">
     <div class="piece-modal-title" id="pieceModalTitle">Piece #1</div>
     <div class="piece-modal-sub" id="pieceModalSub">₱210.00 · 0.955 kg</div>
-    <div class="piece-modal-btns">
-      <button class="pm-btn pm-sold" onclick="setPieceStatus('sold')">✓ Sold</button>
-      <button class="pm-btn pm-utang" onclick="setPieceStatus('utang')">📋 Utang</button>
+    <div class="piece-modal-btns" style="flex-direction:column;gap:8px">
+      <div style="display:flex;gap:8px">
+        <button class="pm-btn pm-cash" onclick="setPieceStatus('cash')" style="flex:1">💵 Cash</button>
+        <button class="pm-btn pm-sold" onclick="setPieceStatus('sold')" style="flex:1">🏷️ Fixed</button>
+      </div>
+      <button class="pm-btn pm-utang" onclick="setPieceStatus('utang')" style="width:100%">📋 Utang</button>
     </div>
     <button class="pm-reset" id="pieceModalReset" onclick="setPieceStatus(null)" style="display:none">↩ Mark as Unsold</button>
     <button class="pm-cancel" onclick="closePieceModal()">Cancel</button>
@@ -568,6 +576,8 @@ const wholePieces = [
   { kg:0.932, cost:143.50, sell:205.00 },
   { kg:0.977, cost:150.50, sell:215.00 },
 ];
+
+const CASH_RATE = 180; // ₱/kg cash price for whole chicken
 
 // ── FIREBASE SYNC ─────────────────────────────────────
 const FB_URL = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/data.json';
@@ -701,14 +711,20 @@ function renderParts() {
 function renderWhole() {
   const container = document.getElementById('whole-section');
   const status = getWholeStatus();
-  const soldCount = status.filter(s => s === 'sold').length;
+  const soldCount = status.filter(s => s === 'sold' || s === 'cash').length;
   const utangCount = status.filter(s => s === 'utang').length;
+  const cashCount = status.filter(s => s === 'cash').length;
   const doneCount = soldCount + utangCount;
   const totalCount = wholePieces.length;
-  const soldRev = wholePieces.reduce((a, p, i) => a + (status[i] === 'sold' ? p.sell : 0), 0);
+  const pieceRev = (p, s) => s === 'cash' ? p.kg * CASH_RATE : s === 'sold' ? p.sell : 0;
+  const soldRev = wholePieces.reduce((a, p, i) => a + pieceRev(p, status[i]), 0);
   const utangRev = wholePieces.reduce((a, p, i) => a + (status[i] === 'utang' ? p.sell : 0), 0);
-  const soldCost = wholePieces.reduce((a, p, i) => a + (status[i] !== null ? p.cost : 0), 0);
-  const soldProfit = soldRev - wholePieces.reduce((a, p, i) => a + (status[i] === 'sold' ? p.cost : 0), 0);
+  const soldProfit = wholePieces.reduce((a, p, i) => {
+    const s = status[i];
+    if (s === 'sold') return a + p.sell - p.cost;
+    if (s === 'cash') return a + p.kg * CASH_RATE - p.cost;
+    return a;
+  }, 0);
   const soldKg = wholePieces.reduce((a, p, i) => a + (status[i] !== null ? p.kg : 0), 0);
   const remainingKg = wholePieces.reduce((a, p, i) => a + (status[i] === null ? p.kg : 0), 0);
   const pct = Math.min(100, (doneCount / totalCount) * 100);
@@ -716,16 +732,19 @@ function renderWhole() {
 
   const pieceTiles = wholePieces.map((p, i) => {
     const s = status[i];
-    const cls = s === 'sold' ? 'sold' : s === 'utang' ? 'utang' : '';
+    const cls = s === 'sold' ? 'sold' : s === 'utang' ? 'utang' : s === 'cash' ? 'cash' : '';
     const tag = s === 'sold' ? '<span class="sold-tag">✓</span>'
-              : s === 'utang' ? '<span class="utang-tag">UTANG</span>' : '';
-    const profColor = s === 'sold' ? 'var(--green)' : s === 'utang' ? '#f5a623' : 'var(--accent)';
+              : s === 'utang' ? '<span class="utang-tag">UTANG</span>'
+              : s === 'cash' ? '<span class="cash-tag">CASH</span>' : '';
+    const dispPrice = s === 'cash' ? p.kg * CASH_RATE : p.sell;
+    const dispProfit = s === 'cash' ? p.kg * CASH_RATE - p.cost : p.sell - p.cost;
+    const profColor = s === 'sold' ? 'var(--green)' : s === 'utang' ? '#f5a623' : s === 'cash' ? '#4f8ef7' : 'var(--accent)';
     return `
     <div class="piece-item ${cls}" onclick="openPieceModal(${i})">
       ${tag}
-      <div class="piece-price">${fmt(p.sell)}</div>
+      <div class="piece-price">${fmt(dispPrice)}</div>
       <div class="piece-label">#${i+1} · ${p.kg}kg</div>
-      <div class="piece-label" style="color:${profColor}">+${fmt(p.sell - p.cost)}</div>
+      <div class="piece-label" style="color:${profColor}">+${fmt(dispProfit)}</div>
     </div>`;
   }).join('');
 
@@ -738,13 +757,14 @@ function renderWhole() {
         <div class="product-stats">
           <div class="stat"><div class="stat-label">Profit</div><div class="stat-value profit">${fmt(soldProfit)}</div></div>
           <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${totalCount - doneCount} pcs · ${fmtKg(remainingKg)}</div></div>
-          <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${soldCount} pcs · ${fmtKg(wholePieces.reduce((a,p,i)=>a+(status[i]==='sold'?p.kg:0),0))}</div></div>
+          <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${soldCount} pcs</div></div>
+          ${cashCount > 0 ? `<div class="stat"><div class="stat-label">Cash</div><div class="stat-value" style="color:#4f8ef7">${cashCount} pcs</div></div>` : ''}
           ${utangLine}
         </div>
       </div>
       <div class="progress-wrap">
         <div class="progress-labels">
-          <span>${soldCount} sold · ${utangCount} utang · ${totalCount - doneCount} remaining</span>
+          <span>${soldCount - cashCount} fixed · ${cashCount} cash · ${utangCount} utang · ${totalCount - doneCount} remaining</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -764,8 +784,16 @@ function renderSummary() {
   // Whole
   const wst = getWholeStatus();
   const wholeCap = wholePieces.reduce((a,p) => a + p.cost, 0);
-  const wholeSoldRev = wholePieces.reduce((a,p,i) => a + (wst[i] === 'sold' ? p.sell : 0), 0);
-  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (wst[i] === 'sold' ? p.sell - p.cost : 0), 0);
+  const wholeSoldRev = wholePieces.reduce((a,p,i) => {
+    const s = wst[i];
+    return a + (s === 'sold' ? p.sell : s === 'cash' ? p.kg * CASH_RATE : 0);
+  }, 0);
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => {
+    const s = wst[i];
+    if (s === 'sold') return a + p.sell - p.cost;
+    if (s === 'cash') return a + p.kg * CASH_RATE - p.cost;
+    return a;
+  }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
   const totalCap = partsCap + wholeCap;
@@ -837,7 +865,12 @@ function renderSplits() {
   // compute current net profit for remaining display
   const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
   const wst2 = getWholeStatus();
-  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (wst2[i] === 'sold' ? p.sell - p.cost : 0), 0);
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => {
+    const s = wst2[i];
+    if (s === 'sold') return a + p.sell - p.cost;
+    if (s === 'cash') return a + p.kg * CASH_RATE - p.cost;
+    return a;
+  }, 0);
   const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
   const netProfit = partsSoldProfit + wholeSoldProfit - totalExpenses;
   const remaining = netProfit - totalSplits;
@@ -990,7 +1023,8 @@ function openPieceModal(i) {
   const p = wholePieces[i];
   const s = getWholeStatus()[i];
   document.getElementById('pieceModalTitle').textContent = `Piece #${i+1}`;
-  document.getElementById('pieceModalSub').textContent = `${fmt(p.sell)} · ${p.kg} kg · Profit +${fmt(p.sell - p.cost)}`;
+  const cashPrice = p.kg * CASH_RATE;
+  document.getElementById('pieceModalSub').textContent = `${p.kg} kg · Fixed ${fmt(p.sell)} · Cash ${fmt(cashPrice)}`;
   document.getElementById('pieceModalReset').style.display = s ? 'block' : 'none';
   document.getElementById('pieceModalOverlay').classList.add('open');
 }
