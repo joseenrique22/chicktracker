@@ -397,6 +397,42 @@
   .expense-add input.exp-name { flex: 2; min-width: 120px; }
   .expense-add input.exp-amt  { flex: 1; min-width: 90px; }
 
+  /* PROFIT SPLIT */
+  .split-card { padding: 18px 20px; }
+  .split-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .split-shares { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .split-share {
+    flex: 1; min-width: 120px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    text-align: center;
+  }
+  .split-share-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+  .split-share-value { font-family: 'Space Grotesk', sans-serif; font-size: 18px; font-weight: 700; }
+  .split-share.mine .split-share-value { color: var(--green); }
+  .split-share.partner .split-share-value { color: var(--accent); }
+  .split-accumulated {
+    background: rgba(46,204,113,0.06);
+    border: 1px solid rgba(46,204,113,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .split-accumulated-label { font-size: 12px; color: var(--muted); }
+  .split-accumulated-value { font-family: 'Space Grotesk', sans-serif; font-size: 20px; font-weight: 700; color: var(--green); }
+  .split-input {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+    color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 15px;
+    font-weight: 500; padding: 8px 12px; width: 80px; outline: none; transition: border-color 0.2s;
+  }
+  .split-input:focus { border-color: var(--accent); }
+  .btn-split { background: var(--green); color: #fff; }
+  .btn-reset-acc { background: rgba(231,76,60,0.15); color: var(--red); border: 1px solid rgba(231,76,60,0.2); font-size: 12px; padding: 6px 12px; }
+
   /* TOGGLE ARROW */
   .toggle-arrow {
     font-size: 12px;
@@ -434,6 +470,19 @@
     </div>
     <button class="pm-reset" id="pieceModalReset" onclick="setPieceStatus(null)" style="display:none">↩ Mark as Unsold</button>
     <button class="pm-cancel" onclick="closePieceModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- PART STATUS MODAL -->
+<div class="piece-modal-overlay" id="partModalOverlay" onclick="closePartModal(event)">
+  <div class="piece-modal">
+    <div class="piece-modal-title" id="partModalTitle">Chicken Head</div>
+    <div class="piece-modal-sub" id="partModalSub"></div>
+    <div class="piece-modal-btns">
+      <button class="pm-btn pm-sold" onclick="setPartStatus('sold')">✓ Sold</button>
+      <button class="pm-btn pm-utang" onclick="setPartStatus('utang')">📋 Utang</button>
+    </div>
+    <button class="pm-cancel" onclick="closePartModal()">Cancel</button>
   </div>
 </div>
 
@@ -479,6 +528,11 @@
 <div class="section">
   <div class="section-title">Expenses</div>
   <div id="expenses-section"></div>
+</div>
+
+<div class="section">
+  <div class="section-title">Profit Split</div>
+  <div id="split-section"></div>
 </div>
 
 <div class="footer-note">Tap any part row to adjust · Tap piece to mark sold · ☁️ Syncs across devices</div>
@@ -536,14 +590,20 @@ function saveState() {
 
 // ── STATE ─────────────────────────────────────────────
 const defaultState = {
-  parts: parts.map(p => ({ ...p, soldKg: 0 })),
+  parts: parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 })),
   whole: { status: wholePieces.map(() => null) },
   expenses: [],
+  splitPercent: 50,
+  accumulatedProfit: 0,
 };
 
 let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
 const state = localSaved || JSON.parse(JSON.stringify(defaultState));
+// migrate: ensure utangKg exists on all parts
+if (state.parts) state.parts.forEach(p => { if (p.utangKg == null) p.utangKg = 0; });
+if (state.splitPercent == null) state.splitPercent = 50;
+if (state.accumulatedProfit == null) state.accumulatedProfit = 0;
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -561,13 +621,16 @@ function renderParts() {
   container.innerHTML = '';
 
   state.parts.forEach((p, idx) => {
-    const capital = p.kg * p.buyPkg;
-    const totalRev = p.kg * p.sellPkg;
-    const soldRev = p.soldKg * p.sellPkg;
-    const soldProfit = p.soldKg * (p.sellPkg - p.buyPkg);
-    const remaining = Math.max(0, p.kg - p.soldKg);
-    const pct = Math.min(100, (p.soldKg / p.kg) * 100);
+    const utangKg = p.utangKg || 0;
+    const soldKg = p.soldKg || 0;
+    const totalDoneKg = soldKg + utangKg;
+    const soldProfit = soldKg * (p.sellPkg - p.buyPkg);
+    const remaining = Math.max(0, p.kg - totalDoneKg);
+    const pct = Math.min(100, (totalDoneKg / p.kg) * 100);
     const [label, badgeClass] = soldBadge(pct);
+    const utangStat = utangKg > 0
+      ? `<div class="stat"><div class="stat-label">Utang</div><div class="stat-value" style="color:#f5a623">${fmtKg(utangKg)}</div></div>`
+      : '';
 
     const div = document.createElement('div');
     div.className = 'product-card';
@@ -590,15 +653,16 @@ function renderParts() {
             </div>
             <div class="stat">
               <div class="stat-label">Sold</div>
-              <div class="stat-value">${fmtKg(p.soldKg)}</div>
+              <div class="stat-value">${fmtKg(soldKg)}</div>
             </div>
+            ${utangStat}
           </div>
           <div class="toggle-arrow" id="arrow-${p.id}">▼</div>
         </div>
       </div>
       <div class="progress-wrap">
         <div class="progress-labels">
-          <span>Sold ${fmtKg(p.soldKg)} of ${fmtKg(p.kg)}</span>
+          <span>${fmtKg(soldKg)} sold · ${utangKg > 0 ? fmtKg(utangKg) + ' utang · ' : ''}${fmtKg(remaining)} remaining</span>
           <span>${pct.toFixed(0)}%</span>
         </div>
         <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
@@ -606,8 +670,8 @@ function renderParts() {
       <div class="input-panel" id="panel-${p.id}">
         <div class="input-row">
           <div class="input-group">
-            <label>Sold (kg)</label>
-            <input type="number" id="sold-${p.id}" value="${p.soldKg}" min="0" max="${p.kg}" step="0.1" placeholder="0.00">
+            <label>Kg Amount</label>
+            <input type="number" id="sold-${p.id}" value="${totalDoneKg}" min="0" max="${p.kg}" step="0.1" placeholder="0.00">
           </div>
           <div class="input-group">
             <label>Buy/kg</label>
@@ -691,8 +755,8 @@ function renderWhole() {
 function renderSummary() {
   // Parts
   const partsCap = state.parts.reduce((a,p) => a + p.kg * p.buyPkg, 0);
-  const partsSoldRev = state.parts.reduce((a,p) => a + p.soldKg * p.sellPkg, 0);
-  const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
+  const partsSoldRev = state.parts.reduce((a,p) => a + (p.soldKg||0) * p.sellPkg, 0);
+  const partsSoldProfit = state.parts.reduce((a,p) => a + (p.soldKg||0) * (p.sellPkg - p.buyPkg), 0);
 
   // Whole
   const wst = getWholeStatus();
@@ -753,11 +817,78 @@ function renderExpenses() {
   `;
 }
 
+function getCurrentNetProfit() {
+  const partsSoldProfit = state.parts.reduce((a,p) => a + (p.soldKg||0) * (p.sellPkg - p.buyPkg), 0);
+  const wst = getWholeStatus();
+  const wholeSoldProfit = wholePieces.reduce((a,p,i) => a + (wst[i] === 'sold' ? p.sell - p.cost : 0), 0);
+  const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
+  return partsSoldProfit + wholeSoldProfit - totalExpenses;
+}
+
+function renderProfitSplit() {
+  const container = document.getElementById('split-section');
+  if (!container) return;
+  const splitPercent = state.splitPercent != null ? state.splitPercent : 50;
+  const accumulated = state.accumulatedProfit || 0;
+  const netProfit = getCurrentNetProfit();
+  const partnerShare = netProfit * (splitPercent / 100);
+  const myShare = netProfit - partnerShare;
+
+  container.innerHTML = `
+    <div class="product-card">
+      <div class="split-card">
+        <div class="split-row">
+          <span style="font-size:13px;color:var(--label);">Partner's share:</span>
+          <input class="split-input" id="split-pct" type="number" min="0" max="100" step="1" value="${splitPercent}">
+          <span style="font-size:13px;color:var(--label);">%</span>
+          <button class="btn btn-split" onclick="splitProfit()">Split Now</button>
+          <button class="btn btn-ghost btn-reset-acc" onclick="resetAccumulated()">Reset Total</button>
+        </div>
+        <div class="split-shares">
+          <div class="split-share mine">
+            <div class="split-share-label">My Share (${100 - splitPercent}%)</div>
+            <div class="split-share-value">${fmt(myShare)}</div>
+          </div>
+          <div class="split-share partner">
+            <div class="split-share-label">Partner's Share (${splitPercent}%)</div>
+            <div class="split-share-value">${fmt(partnerShare)}</div>
+          </div>
+        </div>
+        <div class="split-accumulated">
+          <div>
+            <div class="split-accumulated-label">Total Accumulated (My Share)</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px;">Running total from all splits</div>
+          </div>
+          <div class="split-accumulated-value">${fmt(accumulated)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function splitProfit() {
+  const splitPercent = parseFloat(document.getElementById('split-pct').value) || 0;
+  state.splitPercent = splitPercent;
+  const netProfit = getCurrentNetProfit();
+  const myShare = netProfit * ((100 - splitPercent) / 100);
+  state.accumulatedProfit = (state.accumulatedProfit || 0) + myShare;
+  saveState();
+  renderProfitSplit();
+}
+
+function resetAccumulated() {
+  if (!confirm('Reset accumulated profit total to zero?')) return;
+  state.accumulatedProfit = 0;
+  saveState();
+  renderProfitSplit();
+}
+
 function render() {
   renderParts();
   renderWhole();
   renderExpenses();
   renderSummary();
+  renderProfitSplit();
 }
 
 // ── INTERACTIONS ──────────────────────────────────────
@@ -793,17 +924,44 @@ function togglePanel(id, headerEl) {
   }
 }
 
+let _pendingPartUpdate = null;
+
 function updatePart(id) {
   const idx = state.parts.findIndex(p => p.id === id);
   if (idx === -1) return;
-  const soldKg = parseFloat(document.getElementById('sold-'+id).value) || 0;
+  const kgAmt = parseFloat(document.getElementById('sold-'+id).value) || 0;
   const buyPkg = parseFloat(document.getElementById('buy-'+id).value) || 0;
   const sellPkg = parseFloat(document.getElementById('sell-'+id).value) || 0;
   const totalKg = parseFloat(document.getElementById('total-'+id).value) || 0;
-  state.parts[idx].soldKg = Math.min(soldKg, totalKg);
+  _pendingPartUpdate = { id, idx, kgAmt: Math.min(kgAmt, totalKg), buyPkg, sellPkg, totalKg };
+  const p = state.parts[idx];
+  const profit = _pendingPartUpdate.kgAmt * (sellPkg - buyPkg);
+  document.getElementById('partModalTitle').textContent = p.emoji + ' ' + p.name;
+  document.getElementById('partModalSub').textContent = `${fmtKg(_pendingPartUpdate.kgAmt)} · Est. Profit +${fmt(profit)}`;
+  document.getElementById('partModalOverlay').classList.add('open');
+}
+
+function closePartModal(e) {
+  if (e && e.target !== document.getElementById('partModalOverlay')) return;
+  document.getElementById('partModalOverlay').classList.remove('open');
+  _pendingPartUpdate = null;
+}
+
+function setPartStatus(status) {
+  if (!_pendingPartUpdate) return;
+  const { id, idx, kgAmt, buyPkg, sellPkg, totalKg } = _pendingPartUpdate;
   state.parts[idx].buyPkg = buyPkg;
   state.parts[idx].sellPkg = sellPkg;
   state.parts[idx].kg = totalKg;
+  if (status === 'sold') {
+    state.parts[idx].soldKg = kgAmt;
+    state.parts[idx].utangKg = 0;
+  } else {
+    state.parts[idx].utangKg = kgAmt;
+    state.parts[idx].soldKg = 0;
+  }
+  document.getElementById('partModalOverlay').classList.remove('open');
+  _pendingPartUpdate = null;
   saveState();
   render();
   setTimeout(() => togglePanel('panel-'+id), 10);
@@ -845,9 +1003,10 @@ function setPieceStatus(s) {
 
 function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
-  state.parts = parts.map(p => ({ ...p, soldKg: 0 }));
+  state.parts = parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 }));
   state.whole = { status: wholePieces.map(() => null) };
   state.expenses = [];
+  state.accumulatedProfit = 0;
   saveState();
   render();
 }
