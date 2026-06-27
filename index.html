@@ -1382,7 +1382,7 @@ function ledgerMarkPaid(id) {
   const e = state.ledger.find(e => e.id === id);
   if (!e) return;
   e.fullyPaid = !e.fullyPaid;
-  saveState(); renderLedger(); renderSummary();
+  saveState(); render();
 }
 
 function render() {
@@ -1401,16 +1401,12 @@ function addExpense() {
   if (!name || amount <= 0) return;
   if (!state.expenses) state.expenses = [];
   state.expenses.push({ name, amount });
-  saveState();
-  renderExpenses();
-  renderSummary();
+  saveState(); render();
 }
 
 function deleteExpense(i) {
   state.expenses.splice(i, 1);
-  saveState();
-  renderExpenses();
-  renderSummary();
+  saveState(); render();
 }
 
 function addSplit() {
@@ -1419,16 +1415,12 @@ function addSplit() {
   if (amount <= 0) return;
   if (!state.splits) state.splits = [];
   state.splits.push({ note: note || 'Split', amount });
-  saveState();
-  renderSplits();
-  renderSummary();
+  saveState(); render();
 }
 
 function deleteSplit(i) {
   state.splits.splice(i, 1);
-  saveState();
-  renderSplits();
-  renderSummary();
+  saveState(); render();
 }
 
 function togglePanel(id, headerEl) {
@@ -1459,7 +1451,7 @@ function quickAddPart(id, type) {
   if (type === 'sold') {
     p.soldKg += add;
     document.getElementById('qkg-'+id).value = '';
-    saveState(); renderParts(); renderSummary();
+    saveState(); render();
   } else {
     // utang — ask customer
     document.getElementById('qkg-'+id).value = '';
@@ -1467,7 +1459,7 @@ function quickAddPart(id, type) {
       if (!p.utangEntries) p.utangEntries = [];
       p.utangEntries.push({ kg: add, amt: +(add * p.sellPkg).toFixed(2), customer });
       ensureLedgerEntry(customer);
-      saveState(); renderParts(); renderLedger(); renderSummary();
+      saveState(); render();
     });
   }
 }
@@ -1532,7 +1524,7 @@ function setPieceStatus(s) {
       state.whole.status[savedIdx] = 'utang';
       state.whole.statusMeta[savedIdx] = customer;
       ensureLedgerEntry(customer);
-      saveState(); renderWhole(); renderLedger(); renderSummary();
+      saveState(); render();
     });
   } else {
     // clear statusMeta if changing away from utang
@@ -1540,7 +1532,7 @@ function setPieceStatus(s) {
     state.whole.status[_modalIdx] = s;
     document.getElementById('pieceModalOverlay').classList.remove('open');
     _modalIdx = null;
-    saveState(); renderWhole(); renderLedger(); renderSummary();
+    saveState(); render();
   }
 }
 
@@ -1620,7 +1612,7 @@ function clearStockItem(ref) {
     const p = state.parts.find(p => p.id === partId);
     if (p && p.utangEntries) p.utangEntries.splice(ei, 1);
   }
-  saveState(); renderParts(); renderWhole(); renderLedger(); renderSummary();
+  saveState(); render();
 }
 
 function resetData() {
