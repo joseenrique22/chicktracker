@@ -682,10 +682,6 @@
   <div id="expenses-section"></div>
 </div>
 
-<div class="section">
-  <div class="section-title">Profit Split</div>
-  <div id="splits-section"></div>
-</div>
 
 <div class="section">
   <div class="section-title">📒 Utang Ledger</div>
@@ -787,7 +783,6 @@ try {
 function normalizeState() {
   // Ensure top-level arrays
   if (!Array.isArray(state.expenses)) state.expenses = toArray(state.expenses);
-  if (!Array.isArray(state.splits))   state.splits   = toArray(state.splits);
 
   // Ensure parts array and per-part fields
   if (!Array.isArray(state.parts) || !state.parts.length)
@@ -1164,60 +1159,6 @@ function renderExpenses() {
   `;
 }
 
-function renderSplits() {
-  const container = document.getElementById('splits-section');
-  const splits = state.splits || [];
-  const totalSplits = splits.reduce((a, s) => a + s.amount, 0);
-
-  // compute current net profit for remaining display
-  const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
-  const wst2 = getWholeStatus();
-  const wholeSoldProfit = wholePieces.reduce((a,p,i) => {
-    const s = wst2[i];
-    if (s === 'sold') return a + p.sell - p.cost;
-    if (s === 'cash') return a + p.kg * CASH_RATE - p.cost;
-    return a;
-  }, 0);
-  const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
-  const netProfit = partsSoldProfit + wholeSoldProfit - totalExpenses;
-  const remaining = netProfit - totalSplits;
-
-  const rows = splits.length
-    ? splits.map((s, i) => `
-        <div class="split-row">
-          <span class="split-note">${s.note || 'Split'}</span>
-          <span class="split-amount">−${fmt(s.amount)}</span>
-          <button class="split-del" onclick="deleteSplit(${i})">×</button>
-        </div>`).join('')
-    : '<div style="padding:10px 0;font-size:12px;color:var(--muted);">No splits recorded yet</div>';
-
-  container.innerHTML = `
-    <div class="product-card">
-      <div class="product-header" style="cursor:default">
-        <div class="product-name">🤝 Profit Split</div>
-        <div class="stat">
-          <div class="stat-label">Total Split</div>
-          <div class="stat-value" style="color:#a78bfa">${fmt(totalSplits)}</div>
-        </div>
-      </div>
-      <div class="split-list">${rows}</div>
-      <div class="split-remaining-bar">
-        <div>
-          <div class="split-remaining-label">Remaining (Unsplit)</div>
-          <div class="split-remaining-value">${fmt(Math.max(0, remaining))}</div>
-        </div>
-        <div style="font-size:11px;color:var(--muted);text-align:right">
-          Net ₱${netProfit.toFixed(2)}<br>Split ₱${totalSplits.toFixed(2)}
-        </div>
-      </div>
-      <div class="split-add">
-        <input id="split-note" type="text" placeholder="Note (e.g. Week 1 split)">
-        <input id="split-amt" type="number" placeholder="Amount" min="0" step="1">
-        <button class="btn btn-primary" style="padding:7px 14px;background:#a78bfa;color:#fff" onclick="addSplit()">Record Split</button>
-      </div>
-    </div>
-  `;
-}
 
 function renderLedger() {
   const container = document.getElementById('ledger-section');
@@ -1391,7 +1332,6 @@ function render() {
   try { renderParts();    } catch(e) { console.error('renderParts',    e); }
   try { renderWhole();   } catch(e) { console.error('renderWhole',   e); }
   try { renderExpenses();} catch(e) { console.error('renderExpenses',e); }
-  try { renderSplits();  } catch(e) { console.error('renderSplits',  e); }
   try { renderLedger();  } catch(e) { console.error('renderLedger',  e); }
   try { renderSummary(); } catch(e) { console.error('renderSummary', e); }
 }
@@ -1411,19 +1351,6 @@ function deleteExpense(i) {
   saveState(); render();
 }
 
-function addSplit() {
-  const note = document.getElementById('split-note').value.trim();
-  const amount = parseFloat(document.getElementById('split-amt').value) || 0;
-  if (amount <= 0) return;
-  if (!state.splits) state.splits = [];
-  state.splits.push({ note: note || 'Split', amount });
-  saveState(); render();
-}
-
-function deleteSplit(i) {
-  state.splits.splice(i, 1);
-  saveState(); render();
-}
 
 function togglePanel(id, headerEl) {
   const panel = document.getElementById(id);
