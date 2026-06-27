@@ -1031,29 +1031,47 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // Payments received from ledger (partial or full) = real money in hand
-  const totalLedgerPayments = (state.ledger||[]).reduce((a,e) =>
-    a + (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0), 0);
+  // Per-ledger-entry: how much has been received and how much is still owed
+  let totalReceivedFromLedger = 0, totalUtangRev = 0, totalUtangProfit = 0;
 
-  // Utang still pending (owed but not yet paid)
-  let totalUtangRev = 0, totalUtangProfit = 0;
+  (state.ledger||[]).forEach(e => {
+    const manualTotal = (e.items||[]).reduce((s,it) => s + (Number(it.amt)||0), 0);
+    const stockItems  = getStockItemsForCustomer(e.name);
+    const stockTotal  = stockItems.reduce((s,it) => s + (Number(it.amt)||0), 0);
+    const totalOwed   = manualTotal + stockTotal;
+    const paid        = (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0);
+
+    if (e.fullyPaid) {
+      // Fully paid: all owed amount counts as received
+      totalReceivedFromLedger += totalOwed || paid;
+    } else {
+      // Partially paid: only actual payments count as received
+      totalReceivedFromLedger += paid;
+      // Remaining is still pending
+      const pending = Math.max(0, totalOwed - paid);
+      totalUtangRev += pending;
+    }
+  });
+
+  // Whole chicken utang not linked to any ledger entry — always pending
   wholePieces.forEach((p, i) => {
     if (wst[i] !== 'utang') return;
-    totalUtangRev    += p.sell;
-    totalUtangProfit += p.sell - p.cost;
+    const customer = (state.whole.statusMeta||{})[i];
+    const inLedger = customer && (state.ledger||[]).some(e => e.name.toLowerCase() === customer.toLowerCase());
+    if (!inLedger) { totalUtangRev += p.sell; totalUtangProfit += p.sell - p.cost; }
   });
   state.parts.forEach(p => {
     (p.utangEntries||[]).forEach(e => {
-      totalUtangRev    += Number(e.amt) || 0;
-      totalUtangProfit += (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
+      const inLedger = e.customer && (state.ledger||[]).some(le => le.name.toLowerCase() === e.customer.toLowerCase());
+      if (!inLedger) {
+        totalUtangRev    += Number(e.amt) || 0;
+        totalUtangProfit += (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
+      }
     });
   });
-  // Subtract already-paid portion from pending
-  totalUtangRev    = Math.max(0, totalUtangRev    - totalLedgerPayments);
-  totalUtangProfit = Math.max(0, totalUtangProfit - totalLedgerPayments * (totalUtangProfit / (totalUtangRev + totalLedgerPayments || 1)));
 
   const totalCap    = partsCap + wholeCap;
-  const totalRev    = partsSoldRev + wholeSoldRev + totalLedgerPayments;
+  const totalRev    = partsSoldRev + wholeSoldRev + totalReceivedFromLedger;
   const totalProfit = partsSoldProfit + wholeSoldProfit;
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
