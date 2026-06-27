@@ -976,9 +976,9 @@ function renderWhole() {
 // ── RENDER SUMMARY ────────────────────────────────────
 function renderSummary() {
   // Parts
-  const partsCap = state.parts.reduce((a,p) => a + p.kg * p.buyPkg, 0);
-  const partsSoldRev = state.parts.reduce((a,p) => a + p.soldKg * p.sellPkg, 0);
-  const partsSoldProfit = state.parts.reduce((a,p) => a + p.soldKg * (p.sellPkg - p.buyPkg), 0);
+  const partsCap = state.parts.reduce((a,p) => a + (Number(p.kg)||0) * (Number(p.buyPkg)||0), 0);
+  const partsSoldRev = state.parts.reduce((a,p) => a + (Number(p.soldKg)||0) * (Number(p.sellPkg)||0), 0);
+  const partsSoldProfit = state.parts.reduce((a,p) => a + (Number(p.soldKg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0)), 0);
 
   // Whole
   const wst = getWholeStatus();
@@ -1284,12 +1284,12 @@ function ledgerMarkPaid(id) {
 }
 
 function render() {
-  renderParts();
-  renderWhole();
-  renderExpenses();
-  renderSplits();
-  renderLedger();
-  renderSummary();
+  try { renderParts();    } catch(e) { console.error('renderParts',    e); }
+  try { renderWhole();   } catch(e) { console.error('renderWhole',   e); }
+  try { renderExpenses();} catch(e) { console.error('renderExpenses',e); }
+  try { renderSplits();  } catch(e) { console.error('renderSplits',  e); }
+  try { renderLedger();  } catch(e) { console.error('renderLedger',  e); }
+  try { renderSummary(); } catch(e) { console.error('renderSummary', e); }
 }
 
 // ── INTERACTIONS ──────────────────────────────────────
@@ -1522,15 +1522,16 @@ function clearStockItem(ref) {
 }
 
 function resetData() {
-  if (!confirm('Reset all sales data back to zero?')) return;
+  if (!confirm('Reset all sales data back to zero? This also clears cloud sync.')) return;
   state.parts = parts.map(p => ({ ...p, soldKg: 0, utangEntries: [] }));
   state.whole = { status: wholePieces.map(() => null), statusMeta: {} };
-  normalizeState();
   state.expenses = [];
   state.splits = [];
   state.ledger = JSON.parse(JSON.stringify(defaultLedger));
   _ledgerIdSeq = defaultLedger.length + 1;
-  saveState();
+  normalizeState();
+  localStorage.setItem('chicktrack', JSON.stringify(state));
+  fetch(FB_URL, { method: 'PUT', body: JSON.stringify(state) }).catch(() => {});
   render();
 }
 
