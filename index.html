@@ -1364,7 +1364,7 @@ function ledgerMarkPaid(id) {
   const e = state.ledger.find(e => e.id === id);
   if (!e) return;
   e.fullyPaid = !e.fullyPaid;
-  saveState(); renderLedger();
+  saveState(); renderLedger(); renderSummary();
 }
 
 function render() {
