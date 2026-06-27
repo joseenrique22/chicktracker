@@ -1070,16 +1070,16 @@ function renderSummary() {
     });
   });
 
-  const totalCap    = partsCap + wholeCap;
-  const totalRev    = partsSoldRev + wholeSoldRev + totalReceivedFromLedger;
-  const totalProfit = partsSoldProfit + wholeSoldProfit;
+  const totalCap  = partsCap + wholeCap;
+  const totalRev  = partsSoldRev + wholeSoldRev + totalReceivedFromLedger;
+  // Profit = Revenue − Capital (correct: includes all received money)
+  const grossProfit = totalRev - totalCap;
+  const totalExpenses = (state.expenses || []).reduce((a, e) => a + (Number(e.amount)||0), 0);
+  const netProfit  = grossProfit - totalExpenses;
+  // Auto 50% partner split — no manual entry needed
+  const myShare    = netProfit * 0.5;
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
-
-  const totalExpenses = (state.expenses || []).reduce((a, e) => a + (Number(e.amount)||0), 0);
-  const grossProfit   = totalProfit - totalExpenses;
-  // Auto 50% partner split on gross profit
-  const myShare       = grossProfit * 0.5;
 
   document.getElementById('totalCap').textContent = fmt(totalCap);
   document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
@@ -1095,22 +1095,24 @@ function renderSummary() {
     }
   }
   document.getElementById('totalPro').textContent = fmt(myShare);
-  document.getElementById('totalProSub').textContent =
-    `Gross ${fmt(grossProfit)} · 50% your share · Exp −₱${totalExpenses.toFixed(2)}`;
+  let proSub = `Net ${fmt(netProfit)} · 50% your share`;
+  if (totalExpenses > 0) proSub += ` · Exp −₱${totalExpenses.toFixed(2)}`;
+  document.getElementById('totalProSub').textContent = proSub;
 
   // Pending utang profit indicator (your 50% share of pending)
+  const pendingUtangProfit = totalUtangRev * 0.5; // rough 50% of pending revenue as profit estimate
   const pendingEl = document.getElementById('pendingProfit');
   if (pendingEl) {
-    if (totalUtangProfit > 0) {
-      pendingEl.textContent = `+ ${fmt(totalUtangProfit * 0.5)} pending your share (utang)`;
+    if (totalUtangRev > 0) {
+      pendingEl.textContent = `+ ~${fmt(pendingUtangProfit)} your share pending (utang)`;
       pendingEl.style.display = 'block';
     } else {
       pendingEl.style.display = 'none';
     }
   }
 
-  // Cash to keep = Revenue − partner's 50% profit share
-  const partnerShare = grossProfit * 0.5;
+  // Cash to keep = Revenue − partner's 50% of net profit
+  const partnerShare = netProfit * 0.5;
   const cashToKeep  = totalRev - partnerShare;
   const keepEl = document.getElementById('totalKeep');
   if (keepEl) keepEl.textContent = fmt(cashToKeep);
