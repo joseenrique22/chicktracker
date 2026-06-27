@@ -784,6 +784,11 @@ function normalizeState() {
         : (p.utangKg > 0 ? [{ kg: p.utangKg, amt: +(p.utangKg * (p.sellPkg||0)).toFixed(2), customer: null }] : []);
       delete p.utangKg;
     }
+    // Backfill missing amt on old entries
+    p.utangEntries.forEach(e => {
+      if (typeof e.amt !== 'number' || isNaN(e.amt))
+        e.amt = +((Number(e.kg)||0) * (Number(p.sellPkg)||0)).toFixed(2);
+    });
   });
 
   // Ensure whole object
