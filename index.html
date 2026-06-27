@@ -639,6 +639,7 @@
     <div class="card-label">Revenue (Sold)</div>
     <div class="card-value" id="totalRev">—</div>
     <div class="card-sub" id="totalRevSub"></div>
+    <div id="pendingRev" style="display:none;font-size:11px;margin-top:5px;color:#f5a623;font-weight:600;letter-spacing:0.02em"></div>
   </div>
   <div class="card pro">
     <div class="card-label">Profit (Sold)</div>
@@ -1009,7 +1010,15 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // Pending (utang) profit
+  // Pending (utang) revenue + profit
+  const partsUtangRev = state.parts.reduce((a,p) => {
+    return a + (p.utangEntries||[]).reduce((s,e) => s + Number(e.amt), 0);
+  }, 0);
+  const wholeUtangRev = wholePieces.reduce((a,p,i) => {
+    return wst[i] === 'utang' ? a + p.sell : a;
+  }, 0);
+  const totalUtangRev = partsUtangRev + wholeUtangRev;
+
   const partsUtangProfit = state.parts.reduce((a,p) => {
     const uKg = (p.utangEntries||[]).reduce((s,e) => s+e.kg, 0);
     return a + uKg * (p.sellPkg - p.buyPkg);
@@ -1034,6 +1043,15 @@ function renderSummary() {
   document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
   document.getElementById('totalRev').textContent = fmt(totalRev);
   document.getElementById('totalRevSub').textContent = `of ${fmt(totalPotentialRev)} potential`;
+  const pendingRevEl = document.getElementById('pendingRev');
+  if (pendingRevEl) {
+    if (totalUtangRev > 0) {
+      pendingRevEl.textContent = `+ ${fmt(totalUtangRev)} pending (utang)`;
+      pendingRevEl.style.display = 'block';
+    } else {
+      pendingRevEl.style.display = 'none';
+    }
+  }
   document.getElementById('totalPro').textContent = fmt(unsplitProfit);
   let proSub = '';
   if (totalExpenses > 0 || totalSplits > 0) {
