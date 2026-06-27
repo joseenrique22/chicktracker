@@ -748,34 +748,59 @@ const defaultState = {
   ledger: defaultLedger,
 };
 
+function toArray(v) {
+  if (Array.isArray(v)) return v;
+  if (v && typeof v === 'object') return Object.values(v);
+  return [];
+}
+
 let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
-const state = localSaved || JSON.parse(JSON.stringify(defaultState));
-if (!state.ledger || state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
-if (!state.whole.statusMeta) state.whole.statusMeta = {};
-// migrate utangKg → utangEntries per part
-state.parts.forEach(p => {
-  if (!p.utangEntries) {
-    p.utangEntries = p.utangKg > 0 ? [{ kg: p.utangKg, amt: +(p.utangKg * p.sellPkg).toFixed(2), customer: null }] : [];
-    delete p.utangKg;
-  }
-});
-function normalizeLedger() {
-  // Firebase strips empty arrays to null — restore them
-  (state.ledger || []).forEach(e => {
-    if (!Array.isArray(e.items)) e.items = e.items ? Object.values(e.items) : [];
-    if (!Array.isArray(e.payments)) e.payments = e.payments ? Object.values(e.payments) : [];
-  });
-  state.parts.forEach(p => {
-    if (!Array.isArray(p.utangEntries)) p.utangEntries = p.utangEntries ? Object.values(p.utangEntries) : [];
-  });
-  if (!state.whole.statusMeta) state.whole.statusMeta = {};
-  if (!Array.isArray(state.expenses)) state.expenses = state.expenses ? Object.values(state.expenses) : [];
-  if (!Array.isArray(state.splits)) state.splits = state.splits ? Object.values(state.splits) : [];
-  if (!Array.isArray(state.whole.status)) state.whole.status = wholePieces.map(() => null);
+
+// Build state safely — fall back to default on any corruption
+let state;
+try {
+  state = localSaved ? JSON.parse(JSON.stringify(localSaved)) : JSON.parse(JSON.stringify(defaultState));
+} catch(e) {
+  state = JSON.parse(JSON.stringify(defaultState));
 }
-normalizeLedger();
-let _ledgerIdSeq = Math.max(0, ...((state.ledger || []).map(e => e.id || 0)), 0) + 1;
+
+function normalizeState() {
+  // Ensure top-level arrays
+  if (!Array.isArray(state.expenses)) state.expenses = toArray(state.expenses);
+  if (!Array.isArray(state.splits))   state.splits   = toArray(state.splits);
+
+  // Ensure parts array and per-part fields
+  if (!Array.isArray(state.parts) || !state.parts.length)
+    state.parts = parts.map(p => ({ ...p, soldKg: 0, utangEntries: [] }));
+  state.parts.forEach(p => {
+    if (typeof p.soldKg !== 'number') p.soldKg = 0;
+    if (!Array.isArray(p.utangEntries)) {
+      const entries = toArray(p.utangEntries);
+      p.utangEntries = entries.length ? entries
+        : (p.utangKg > 0 ? [{ kg: p.utangKg, amt: +(p.utangKg * (p.sellPkg||0)).toFixed(2), customer: null }] : []);
+      delete p.utangKg;
+    }
+  });
+
+  // Ensure whole object
+  if (!state.whole || typeof state.whole !== 'object') state.whole = {};
+  if (!Array.isArray(state.whole.status)) state.whole.status = toArray(state.whole.status);
+  if (state.whole.status.length !== wholePieces.length) state.whole.status = wholePieces.map(() => null);
+  if (!state.whole.statusMeta || typeof state.whole.statusMeta !== 'object' || Array.isArray(state.whole.statusMeta))
+    state.whole.statusMeta = {};
+
+  // Ensure ledger
+  if (!Array.isArray(state.ledger)) state.ledger = toArray(state.ledger);
+  if (state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+  state.ledger.forEach(e => {
+    if (!Array.isArray(e.items))    e.items    = toArray(e.items);
+    if (!Array.isArray(e.payments)) e.payments = toArray(e.payments);
+  });
+}
+
+normalizeState();
+let _ledgerIdSeq = Math.max(0, ...state.ledger.map(e => e.id || 0), 0) + 1;
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1458,6 +1483,7 @@ function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
   state.parts = parts.map(p => ({ ...p, soldKg: 0, utangEntries: [] }));
   state.whole = { status: wholePieces.map(() => null), statusMeta: {} };
+  normalizeState();
   state.expenses = [];
   state.splits = [];
   state.ledger = JSON.parse(JSON.stringify(defaultLedger));
@@ -1475,15 +1501,17 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 render();
 cloudLoad().then(cloudData => {
   if (cloudData) {
-    const localLedger = state.ledger ? JSON.parse(JSON.stringify(state.ledger)) : null;
-    Object.assign(state, cloudData);
+    const localLedger = JSON.parse(JSON.stringify(state.ledger || []));
+    try { Object.assign(state, cloudData); } catch(e) {}
+    normalizeState();
     // Keep whichever ledger has more entries (local wins on tie)
-    const cloudLedgerLen = Array.isArray(state.ledger) ? state.ledger.length : 0;
-    if (!cloudLedgerLen || (localLedger && localLedger.length >= cloudLedgerLen)) {
-      state.ledger = localLedger || JSON.parse(JSON.stringify(defaultLedger));
-    }
-    normalizeLedger();
-    _ledgerIdSeq = Math.max(_ledgerIdSeq, ...((state.ledger || []).map(e => e.id || 0)), 0) + 1;
+    if (localLedger.length >= state.ledger.length) state.ledger = localLedger;
+    if (state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+    state.ledger.forEach(e => {
+      if (!Array.isArray(e.items))    e.items    = toArray(e.items);
+      if (!Array.isArray(e.payments)) e.payments = toArray(e.payments);
+    });
+    _ledgerIdSeq = Math.max(_ledgerIdSeq, ...state.ledger.map(e => e.id || 0), 0) + 1;
     localStorage.setItem('chicktrack', JSON.stringify(state));
     render();
   }
