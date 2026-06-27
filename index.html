@@ -723,6 +723,7 @@ async function cloudLoad() {
 
 let saveTimer = null;
 function saveState() {
+  state._ts = Date.now();
   localStorage.setItem('chicktrack', JSON.stringify(state));
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
@@ -1561,19 +1562,18 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 render();
 cloudLoad().then(cloudData => {
   if (cloudData) {
-    const localLedger = JSON.parse(JSON.stringify(state.ledger || []));
-    try { Object.assign(state, cloudData); } catch(e) {}
-    normalizeState();
-    // Keep whichever ledger has more entries (local wins on tie)
-    if (localLedger.length >= state.ledger.length) state.ledger = localLedger;
-    if (state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
-    state.ledger.forEach(e => {
-      if (!Array.isArray(e.items))    e.items    = toArray(e.items);
-      if (!Array.isArray(e.payments)) e.payments = toArray(e.payments);
-    });
-    _ledgerIdSeq = Math.max(_ledgerIdSeq, ...state.ledger.map(e => e.id || 0), 0) + 1;
-    localStorage.setItem('chicktrack', JSON.stringify(state));
-    render();
+    const localTs = state._ts || 0;
+    const cloudTs = cloudData._ts || 0;
+    // Only apply cloud data if it is strictly newer than local state
+    if (cloudTs > localTs) {
+      try { Object.assign(state, cloudData); } catch(e) {}
+      normalizeState();
+      if (state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+      _ledgerIdSeq = Math.max(_ledgerIdSeq, ...state.ledger.map(e => e.id || 0), 0) + 1;
+      localStorage.setItem('chicktrack', JSON.stringify(state));
+      render();
+    }
+    // If local is newer or same, local wins — no overwrite needed
   }
 });
 </script>
