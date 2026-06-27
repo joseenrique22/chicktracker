@@ -463,6 +463,84 @@
   .qbtn-sold { background: var(--green); color: #fff; }
   .qbtn-utang { background: #f5a623; color: #000; }
 
+  /* LEDGER */
+  .ledger-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 10px; overflow: hidden;
+  }
+  .ledger-card.paid-out { opacity: 0.55; }
+  .ledger-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 13px 16px; cursor: pointer; gap: 10px;
+  }
+  .ledger-name { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; flex: 1; }
+  .ledger-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .ledger-total { font-family: 'Space Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .ledger-remaining { font-family: 'Space Grotesk', sans-serif; font-size: 16px; font-weight: 700; color: var(--red); }
+  .ledger-remaining.zero { color: var(--green); }
+  .paid-badge { background: rgba(46,204,113,0.15); color: var(--green); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; letter-spacing: 0.05em; }
+  .owing-badge { background: rgba(231,76,60,0.13); color: var(--red); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 20px; }
+
+  .ledger-body { display: none; border-top: 1px solid var(--border); }
+  .ledger-body.open { display: block; }
+
+  .ledger-items { padding: 10px 16px 6px; }
+  .ledger-item-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 5px 0; border-bottom: 1px dashed var(--border); font-size: 13px; gap: 8px;
+  }
+  .ledger-item-row:last-child { border-bottom: none; }
+  .ledger-item-desc { color: var(--label); flex: 1; }
+  .ledger-item-amt { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
+  .ledger-item-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
+  .ledger-item-del:hover { color: var(--red); }
+
+  .ledger-payments { padding: 6px 16px 6px; background: var(--surface2); border-top: 1px solid var(--border); }
+  .ledger-pay-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; font-size: 12px; color: var(--muted); gap: 8px;
+  }
+  .ledger-pay-amt { color: var(--green); font-weight: 600; font-family: 'Space Grotesk', sans-serif; }
+  .ledger-pay-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 13px; padding: 0 2px; }
+  .ledger-pay-del:hover { color: var(--red); }
+
+  .ledger-actions {
+    display: flex; gap: 8px; padding: 10px 16px 12px; flex-wrap: wrap;
+    border-top: 1px solid var(--border); align-items: center;
+  }
+  .ledger-pay-input {
+    flex: 1; min-width: 90px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 6px 10px; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .ledger-pay-input:focus { border-color: var(--green); }
+  .lbtn { padding: 7px 14px; border-radius: 8px; border: none; font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s; white-space: nowrap; }
+  .lbtn:hover { opacity: 0.85; }
+  .lbtn-pay { background: var(--green); color: #fff; }
+  .lbtn-paid { background: rgba(46,204,113,0.15); color: var(--green); }
+  .lbtn-del { background: rgba(231,76,60,0.13); color: var(--red); }
+
+  .ledger-add-card {
+    background: var(--surface); border: 1px dashed var(--border);
+    border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;
+  }
+  .ledger-add-title { font-size: 12px; color: var(--muted); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.07em; }
+  .ledger-add-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  .ledger-add-input {
+    flex: 1; min-width: 100px; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 7px 11px; font-size: 13px; outline: none;
+    transition: border-color 0.2s;
+  }
+  .ledger-add-input:focus { border-color: var(--accent); }
+  .ledger-summary-bar {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;
+    display: flex; gap: 20px; flex-wrap: wrap;
+  }
+  .ls-stat { text-align: center; }
+  .ls-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .ls-value { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; margin-top: 2px; }
+
   /* FOOTER NOTE */
   .footer-note {
     max-width: 960px;
@@ -547,6 +625,11 @@
   <div id="splits-section"></div>
 </div>
 
+<div class="section">
+  <div class="section-title">📒 Utang Ledger</div>
+  <div id="ledger-section"></div>
+</div>
+
 <div class="footer-note">Tap any part row to adjust · Tap piece to mark sold/utang · ☁️ Syncs across devices</div>
 
 <script>
@@ -603,16 +686,29 @@ function saveState() {
 }
 
 // ── STATE ─────────────────────────────────────────────
+const defaultLedger = [
+  { id:1, name:'Agnes',       items:[{desc:'Chicken Feet', amt:130}],                                         payments:[{note:'Partial', amt:50}],  fullyPaid:false },
+  { id:2, name:'Marie',       items:[{desc:'Whole Chicken', amt:205}],                                        payments:[{note:'Partial', amt:50}],  fullyPaid:false },
+  { id:3, name:'Inday',       items:[{desc:'Whole Chicken', amt:205},{desc:'Chicken Feet', amt:65}],          payments:[{note:'Partial', amt:100}], fullyPaid:false },
+  { id:4, name:'Michael',     items:[{desc:'Whole Chicken', amt:215},{desc:'Chicken Feet', amt:130}],         payments:[{note:'Partial', amt:100}], fullyPaid:false },
+  { id:5, name:'Uno',         items:[{desc:'Whole Chicken', amt:196}],                                        payments:[],                          fullyPaid:false },
+  { id:6, name:'Angkol Bunbun',items:[{desc:'Chicken Feet', amt:130}],                                       payments:[],                          fullyPaid:false },
+  { id:7, name:'Nang Bebeng', items:[{desc:'Whole Chicken', amt:205}],                                        payments:[{note:'Partial', amt:50}],  fullyPaid:false },
+];
+
 const defaultState = {
   parts: parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 })),
   whole: { status: wholePieces.map(() => null) },
   expenses: [],
   splits: [],
+  ledger: defaultLedger,
 };
 
 let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
 const state = localSaved || JSON.parse(JSON.stringify(defaultState));
+if (!state.ledger) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+let _ledgerIdSeq = Math.max(0, ...(state.ledger.map(e => e.id || 0))) + 1;
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -912,11 +1008,145 @@ function renderSplits() {
   `;
 }
 
+function renderLedger() {
+  const container = document.getElementById('ledger-section');
+  const ledger = state.ledger || [];
+  const active = ledger.filter(e => !e.fullyPaid);
+  const done   = ledger.filter(e => e.fullyPaid);
+  const totalOwed = active.reduce((a, e) => {
+    const tot = e.items.reduce((s, it) => s + it.amt, 0);
+    const paid = e.payments.reduce((s, p) => s + p.amt, 0);
+    return a + Math.max(0, tot - paid);
+  }, 0);
+  const totalCollected = ledger.reduce((a, e) => a + e.payments.reduce((s, p) => s + p.amt, 0), 0);
+
+  const summaryBar = `
+    <div class="ledger-summary-bar">
+      <div class="ls-stat"><div class="ls-label">Still Owing</div><div class="ls-value" style="color:var(--red)">${fmt(totalOwed)}</div></div>
+      <div class="ls-stat"><div class="ls-label">Collected</div><div class="ls-value" style="color:var(--green)">${fmt(totalCollected)}</div></div>
+      <div class="ls-stat"><div class="ls-label">Active</div><div class="ls-value">${active.length}</div></div>
+      <div class="ls-stat"><div class="ls-label">Settled</div><div class="ls-value" style="color:var(--muted)">${done.length}</div></div>
+    </div>`;
+
+  const cardHTML = (e) => {
+    const total = e.items.reduce((s, it) => s + it.amt, 0);
+    const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
+    const rem   = Math.max(0, total - paid);
+    const itemRows = e.items.map((it, ii) => `
+      <div class="ledger-item-row">
+        <span class="ledger-item-desc">${it.desc}</span>
+        <span class="ledger-item-amt">${fmt(it.amt)}</span>
+        <button class="ledger-item-del" onclick="ledgerDelItem(${e.id},${ii})" title="Remove item">×</button>
+      </div>`).join('');
+    const payRows = e.payments.length ? e.payments.map((p, pi) => `
+      <div class="ledger-pay-row">
+        <span>${p.note || 'Payment'}</span>
+        <span class="ledger-pay-amt">+${fmt(p.amt)}</span>
+        <button class="ledger-pay-del" onclick="ledgerDelPay(${e.id},${pi})">×</button>
+      </div>`).join('') : '<div style="font-size:11px;color:var(--muted);padding:4px 0">No payments yet</div>';
+
+    return `
+    <div class="ledger-card${e.fullyPaid ? ' paid-out' : ''}" id="lcard-${e.id}">
+      <div class="ledger-header" onclick="toggleLedger(${e.id})">
+        <div class="ledger-name">${e.name}</div>
+        <div class="ledger-badges">
+          ${e.fullyPaid ? '<span class="paid-badge">✓ PAID</span>' : `<span class="owing-badge">Owing</span>`}
+          <span class="ledger-remaining${rem === 0 ? ' zero' : ''}">${fmt(rem)}</span>
+        </div>
+      </div>
+      <div class="ledger-body" id="lbody-${e.id}">
+        <div class="ledger-items">
+          ${itemRows}
+          <div class="ledger-item-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px">
+            <span class="ledger-item-desc" style="color:var(--text);font-weight:500">Total</span>
+            <span class="ledger-item-amt">${fmt(total)}</span>
+            <span style="width:22px"></span>
+          </div>
+        </div>
+        <div class="ledger-payments">
+          <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Payments</div>
+          ${payRows}
+        </div>
+        <div class="ledger-actions">
+          <input class="ledger-pay-input" id="lpay-${e.id}" type="number" placeholder="₱ Payment amount" min="0" step="1">
+          <input class="ledger-pay-input" id="lpnote-${e.id}" type="text" placeholder="Note (optional)" style="max-width:120px">
+          <button class="lbtn lbtn-pay" onclick="ledgerAddPay(${e.id})">+ Pay</button>
+          ${!e.fullyPaid ? `<button class="lbtn lbtn-paid" onclick="ledgerMarkPaid(${e.id})">✓ Fully Paid</button>` : `<button class="lbtn lbtn-paid" onclick="ledgerMarkPaid(${e.id})">↩ Unpaid</button>`}
+          <button class="lbtn lbtn-del" onclick="ledgerDel(${e.id})">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const addForm = `
+    <div class="ledger-add-card">
+      <div class="ledger-add-title">Add New Utang Record</div>
+      <div class="ledger-add-row">
+        <input class="ledger-add-input" id="l-name" type="text" placeholder="Customer name">
+        <input class="ledger-add-input" id="l-desc" type="text" placeholder="Item (e.g. Whole Chicken)">
+        <input class="ledger-add-input" id="l-amt"  type="number" placeholder="₱ Amount" min="0" step="1" style="max-width:130px">
+        <button class="btn btn-primary" style="padding:7px 14px;white-space:nowrap" onclick="ledgerAdd()">Add</button>
+      </div>
+    </div>`;
+
+  container.innerHTML = summaryBar + active.map(cardHTML).join('') + (done.length ? `<div style="font-size:11px;color:var(--muted);margin:8px 0 6px;padding-left:2px">SETTLED (${done.length})</div>` + done.map(cardHTML).join('') : '') + addForm;
+}
+
+function toggleLedger(id) {
+  const body = document.getElementById('lbody-'+id);
+  if (body) body.classList.toggle('open');
+}
+function ledgerAdd() {
+  const name = document.getElementById('l-name').value.trim();
+  const desc = document.getElementById('l-desc').value.trim();
+  const amt  = parseFloat(document.getElementById('l-amt').value) || 0;
+  if (!name || !desc || amt <= 0) return;
+  if (!state.ledger) state.ledger = [];
+  state.ledger.push({ id: _ledgerIdSeq++, name, items:[{desc, amt}], payments:[], fullyPaid:false });
+  saveState(); renderLedger();
+}
+function ledgerDel(id) {
+  if (!confirm('Remove this record?')) return;
+  state.ledger = state.ledger.filter(e => e.id !== id);
+  saveState(); renderLedger();
+}
+function ledgerDelItem(id, ii) {
+  const e = state.ledger.find(e => e.id === id);
+  if (!e) return;
+  e.items.splice(ii, 1);
+  saveState(); renderLedger();
+}
+function ledgerAddPay(id) {
+  const e = state.ledger.find(e => e.id === id);
+  if (!e) return;
+  const amt  = parseFloat(document.getElementById('lpay-'+id).value) || 0;
+  const note = document.getElementById('lpnote-'+id).value.trim() || 'Payment';
+  if (amt <= 0) return;
+  e.payments.push({ note, amt });
+  const total = e.items.reduce((s, it) => s + it.amt, 0);
+  const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
+  if (paid >= total) e.fullyPaid = true;
+  saveState(); renderLedger();
+}
+function ledgerDelPay(id, pi) {
+  const e = state.ledger.find(e => e.id === id);
+  if (!e) return;
+  e.payments.splice(pi, 1);
+  saveState(); renderLedger();
+}
+function ledgerMarkPaid(id) {
+  const e = state.ledger.find(e => e.id === id);
+  if (!e) return;
+  e.fullyPaid = !e.fullyPaid;
+  saveState(); renderLedger();
+}
+
 function render() {
   renderParts();
   renderWhole();
   renderExpenses();
   renderSplits();
+  renderLedger();
   renderSummary();
 }
 
@@ -1048,6 +1278,8 @@ function resetData() {
   state.whole = { status: wholePieces.map(() => null) };
   state.expenses = [];
   state.splits = [];
+  state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+  _ledgerIdSeq = defaultLedger.length + 1;
   saveState();
   render();
 }
