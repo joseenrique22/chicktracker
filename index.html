@@ -1015,45 +1015,37 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // Fully paid customers — their utang counts as real revenue/profit
-  const paidNames = new Set((state.ledger||[]).filter(e => e.fullyPaid).map(e => e.name.toLowerCase()));
+  // Payments received from ledger (partial or full) = real money in hand
+  const totalLedgerPayments = (state.ledger||[]).reduce((a,e) =>
+    a + (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0), 0);
 
-  // Pending (utang) revenue + profit — split by paid vs still pending
-  let partsUtangRevPaid = 0, partsUtangRevPending = 0;
-  let partsUtangProfitPaid = 0, partsUtangProfitPending = 0;
-  state.parts.forEach(p => {
-    (p.utangEntries||[]).forEach(e => {
-      const isPaid = e.customer && paidNames.has(e.customer.toLowerCase());
-      const rev = Number(e.amt) || 0;
-      const profit = (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
-      if (isPaid) { partsUtangRevPaid += rev; partsUtangProfitPaid += profit; }
-      else         { partsUtangRevPending += rev; partsUtangProfitPending += profit; }
-    });
-  });
-
-  let wholeUtangRevPaid = 0, wholeUtangRevPending = 0;
-  let wholeUtangProfitPaid = 0, wholeUtangProfitPending = 0;
+  // Utang still pending (owed but not yet paid)
+  let totalUtangRev = 0, totalUtangProfit = 0;
   wholePieces.forEach((p, i) => {
     if (wst[i] !== 'utang') return;
-    const customer = (state.whole.statusMeta||{})[i];
-    const isPaid = customer && paidNames.has(customer.toLowerCase());
-    if (isPaid) { wholeUtangRevPaid += p.sell; wholeUtangProfitPaid += p.sell - p.cost; }
-    else         { wholeUtangRevPending += p.sell; wholeUtangProfitPending += p.sell - p.cost; }
+    totalUtangRev    += p.sell;
+    totalUtangProfit += p.sell - p.cost;
   });
-
-  const totalUtangRev    = wholeUtangRevPending    + partsUtangRevPending;
-  const totalUtangProfit = wholeUtangProfitPending + partsUtangProfitPending;
+  state.parts.forEach(p => {
+    (p.utangEntries||[]).forEach(e => {
+      totalUtangRev    += Number(e.amt) || 0;
+      totalUtangProfit += (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
+    });
+  });
+  // Subtract already-paid portion from pending
+  totalUtangRev    = Math.max(0, totalUtangRev    - totalLedgerPayments);
+  totalUtangProfit = Math.max(0, totalUtangProfit - totalLedgerPayments * (totalUtangProfit / (totalUtangRev + totalLedgerPayments || 1)));
 
   const totalCap    = partsCap + wholeCap;
-  const totalRev    = partsSoldRev + wholeSoldRev + partsUtangRevPaid + wholeUtangRevPaid;
-  const totalProfit = partsSoldProfit + wholeSoldProfit + partsUtangProfitPaid + wholeUtangProfitPaid;
+  const totalRev    = partsSoldRev + wholeSoldRev + totalLedgerPayments;
+  const totalProfit = partsSoldProfit + wholeSoldProfit;
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
 
-  const totalExpenses = (state.expenses || []).reduce((a, e) => a + e.amount, 0);
-  const totalSplits = (state.splits || []).reduce((a, s) => a + s.amount, 0);
-  const netProfit = totalProfit - totalExpenses;
-  const unsplitProfit = netProfit - totalSplits;
+  const totalExpenses = (state.expenses || []).reduce((a, e) => a + (Number(e.amount)||0), 0);
+  const grossProfit   = totalProfit - totalExpenses;
+  // Auto 50% partner split on gross profit
+  const myShare       = grossProfit * 0.5;
 
   document.getElementById('totalCap').textContent = fmt(totalCap);
   document.getElementById('totalCapSub').textContent = 'All items · 57.46 kg';
@@ -1068,23 +1060,15 @@ function renderSummary() {
       pendingRevEl.style.display = 'none';
     }
   }
-  document.getElementById('totalPro').textContent = fmt(unsplitProfit);
-  let proSub = '';
-  if (totalExpenses > 0 || totalSplits > 0) {
-    const parts2 = [];
-    if (totalExpenses > 0) parts2.push(`Exp −₱${totalExpenses.toFixed(2)}`);
-    if (totalSplits > 0) parts2.push(`Split −₱${totalSplits.toFixed(2)}`);
-    proSub = `Gross ₱${totalProfit.toFixed(2)} · ${parts2.join(' · ')}`;
-  } else {
-    proSub = unsplitProfit > 0 ? '↑ Based on sold items' : 'No sales yet';
-  }
-  document.getElementById('totalProSub').textContent = proSub;
+  document.getElementById('totalPro').textContent = fmt(myShare);
+  document.getElementById('totalProSub').textContent =
+    `Gross ${fmt(grossProfit)} · 50% your share · Exp −₱${totalExpenses.toFixed(2)}`;
 
-  // Pending utang profit indicator
+  // Pending utang profit indicator (your 50% share of pending)
   const pendingEl = document.getElementById('pendingProfit');
   if (pendingEl) {
     if (totalUtangProfit > 0) {
-      pendingEl.textContent = `+ ${fmt(totalUtangProfit)} pending (utang)`;
+      pendingEl.textContent = `+ ${fmt(totalUtangProfit * 0.5)} pending your share (utang)`;
       pendingEl.style.display = 'block';
     } else {
       pendingEl.style.display = 'none';
