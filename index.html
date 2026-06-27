@@ -1138,12 +1138,12 @@ function renderLedger() {
   const active = ledger.filter(e => !e.fullyPaid);
   const done   = ledger.filter(e => e.fullyPaid);
   const totalOwed = active.reduce((a, e) => {
-    const manualTot = (e.items || []).reduce((s, it) => s + it.amt, 0);
-    const stockTot  = getStockItemsForCustomer(e.name).reduce((s, it) => s + it.amt, 0);
-    const paid = (e.payments || []).reduce((s, p) => s + p.amt, 0);
+    const manualTot = (e.items || []).reduce((s, it) => s + Number(it.amt), 0);
+    const stockTot  = getStockItemsForCustomer(e.name).reduce((s, it) => s + Number(it.amt), 0);
+    const paid = (e.payments || []).reduce((s, p) => s + Number(p.amt), 0);
     return a + Math.max(0, manualTot + stockTot - paid);
   }, 0);
-  const totalCollected = ledger.reduce((a, e) => a + e.payments.reduce((s, p) => s + p.amt, 0), 0);
+  const totalCollected = ledger.reduce((a, e) => a + (e.payments||[]).reduce((s, p) => s + Number(p.amt), 0), 0);
 
   const summaryBar = `
     <div class="ledger-summary-bar">
@@ -1155,18 +1155,20 @@ function renderLedger() {
 
   const cardHTML = (e) => {
     const stockItems = getStockItemsForCustomer(e.name);
-    const manualTotal = (e.items || []).reduce((s, it) => s + it.amt, 0);
-    const stockTotal  = stockItems.reduce((s, it) => s + it.amt, 0);
+    const manualTotal = (e.items || []).reduce((s, it) => s + Number(it.amt), 0);
+    const stockTotal  = stockItems.reduce((s, it) => s + Number(it.amt), 0);
     const total = manualTotal + stockTotal;
-    const paid  = (e.payments || []).reduce((s, p) => s + p.amt, 0);
+    const paid  = (e.payments || []).reduce((s, p) => s + Number(p.amt), 0);
     const rem   = Math.max(0, total - paid);
 
+    const hasBoth = (e.items||[]).length > 0 && stockItems.length > 0;
     const manualRows = (e.items || []).map((it, ii) => `
       <div class="ledger-item-row">
         <span class="ledger-item-desc">${it.desc}</span>
-        <span class="ledger-item-amt">${fmt(it.amt)}</span>
+        <span class="ledger-item-amt">${fmt(Number(it.amt))}</span>
         <button class="ledger-item-del" onclick="ledgerDelItem(${e.id},${ii})" title="Remove item">×</button>
       </div>`).join('');
+    const dupWarning = hasBoth ? `<div style="font-size:11px;color:#f5a623;padding:4px 0 6px">⚠️ Has both manual and stock items — delete duplicates with ×</div>` : '';
 
     const stockRows = stockItems.map(it => `
       <div class="ledger-item-row stock">
@@ -1195,6 +1197,7 @@ function renderLedger() {
       </div>
       <div class="ledger-body" id="lbody-${e.id}">
         <div class="ledger-items">
+          ${dupWarning}
           ${hasItems ? (manualRows + stockRows) : '<div style="font-size:12px;color:var(--muted);padding:4px 0">No items yet</div>'}
           ${total > 0 ? `<div class="ledger-item-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px">
             <span class="ledger-item-desc" style="color:var(--text);font-weight:500">Total</span>
@@ -1360,7 +1363,7 @@ function quickAddPart(id, type) {
     document.getElementById('qkg-'+id).value = '';
     openCPicker((customer) => {
       if (!p.utangEntries) p.utangEntries = [];
-      p.utangEntries.push({ kg: add, amt: amount, customer });
+      p.utangEntries.push({ kg: add, amt: +(add * p.sellPkg).toFixed(2), customer });
       ensureLedgerEntry(customer);
       saveState(); renderParts(); renderLedger(); renderSummary();
     });
