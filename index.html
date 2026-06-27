@@ -644,6 +644,7 @@
     <div class="card-label">Profit (Sold)</div>
     <div class="card-value" id="totalPro">—</div>
     <div class="card-sub" id="totalProSub"></div>
+    <div id="pendingProfit" style="display:none;font-size:11px;margin-top:5px;color:#f5a623;font-weight:600;letter-spacing:0.02em"></div>
   </div>
 </div>
 
@@ -841,7 +842,11 @@ function renderParts() {
         </div>
         <div style="display:flex;align-items:center;gap:20px">
           <div class="product-stats">
-            <div class="stat"><div class="stat-label">Profit</div><div class="stat-value profit">${fmt(soldProfit)}</div></div>
+            <div class="stat">
+              <div class="stat-label">Profit</div>
+              <div class="stat-value profit">${fmt(soldProfit)}</div>
+              ${utangKg > 0 ? `<div style="font-size:10px;color:#f5a623;font-weight:600">+${fmt(utangKg*(p.sellPkg-p.buyPkg))} pending</div>` : ''}
+            </div>
             <div class="stat"><div class="stat-label">Remaining</div><div class="stat-value remaining">${fmtKg(remaining)}</div></div>
             <div class="stat"><div class="stat-label">Sold</div><div class="stat-value">${fmtKg(p.soldKg)}</div></div>
             ${utangStat}
@@ -990,6 +995,16 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
+  // Pending (utang) profit
+  const partsUtangProfit = state.parts.reduce((a,p) => {
+    const uKg = (p.utangEntries||[]).reduce((s,e) => s+e.kg, 0);
+    return a + uKg * (p.sellPkg - p.buyPkg);
+  }, 0);
+  const wholeUtangProfit = wholePieces.reduce((a,p,i) => {
+    return wst[i] === 'utang' ? a + p.sell - p.cost : a;
+  }, 0);
+  const totalUtangProfit = partsUtangProfit + wholeUtangProfit;
+
   const totalCap = partsCap + wholeCap;
   const totalRev = partsSoldRev + wholeSoldRev;
   const totalProfit = partsSoldProfit + wholeSoldProfit;
@@ -1016,6 +1031,17 @@ function renderSummary() {
     proSub = unsplitProfit > 0 ? '↑ Based on sold items' : 'No sales yet';
   }
   document.getElementById('totalProSub').textContent = proSub;
+
+  // Pending utang profit indicator
+  const pendingEl = document.getElementById('pendingProfit');
+  if (pendingEl) {
+    if (totalUtangProfit > 0) {
+      pendingEl.textContent = `+ ${fmt(totalUtangProfit)} pending (utang)`;
+      pendingEl.style.display = 'block';
+    } else {
+      pendingEl.style.display = 'none';
+    }
+  }
 }
 
 function renderExpenses() {
