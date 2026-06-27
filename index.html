@@ -1026,52 +1026,65 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // Per-ledger-entry: how much has been received and how much is still owed
-  let totalReceivedFromLedger = 0, totalUtangRev = 0, totalUtangProfit = 0;
+  // Profit from utang fully paid via ledger (stock items only — we know the margin)
+  let ledgerReceivedRev = 0, ledgerReceivedProfit = 0, totalUtangRev = 0;
 
   (state.ledger||[]).forEach(e => {
-    const manualTotal = (e.items||[]).reduce((s,it) => s + (Number(it.amt)||0), 0);
-    const stockItems  = getStockItemsForCustomer(e.name);
-    const stockTotal  = stockItems.reduce((s,it) => s + (Number(it.amt)||0), 0);
-    const totalOwed   = manualTotal + stockTotal;
-    const paid        = (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0);
-
+    const paid = (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0);
     if (e.fullyPaid) {
-      // Fully paid: all owed amount counts as received
-      totalReceivedFromLedger += totalOwed || paid;
+      // Stock items linked to this customer — we know exact revenue + cost
+      const stockItems = getStockItemsForCustomer(e.name);
+      stockItems.forEach(it => {
+        ledgerReceivedRev += Number(it.amt) || 0;
+      });
+      // Manual items: add to revenue but cost unknown — approximate cost from overall margin
+      const manualTotal = (e.items||[]).reduce((s,it) => s + (Number(it.amt)||0), 0);
+      ledgerReceivedRev += manualTotal;
     } else {
-      // Partially paid: only actual payments count as received
-      totalReceivedFromLedger += paid;
-      // Remaining is still pending
-      const pending = Math.max(0, totalOwed - paid);
-      totalUtangRev += pending;
+      // Partial: count payments as received revenue
+      ledgerReceivedRev += paid;
+      // Remaining still pending
+      const manualTotal = (e.items||[]).reduce((s,it) => s + (Number(it.amt)||0), 0);
+      const stockItems  = getStockItemsForCustomer(e.name);
+      const stockTotal  = stockItems.reduce((s,it) => s + (Number(it.amt)||0), 0);
+      totalUtangRev += Math.max(0, manualTotal + stockTotal - paid);
     }
   });
 
-  // Whole chicken utang not linked to any ledger entry — always pending
+  // Pending utang from whole chicken pieces
   wholePieces.forEach((p, i) => {
     if (wst[i] !== 'utang') return;
-    const customer = (state.whole.statusMeta||{})[i];
-    const inLedger = customer && (state.ledger||[]).some(e => e.name.toLowerCase() === customer.toLowerCase());
-    if (!inLedger) { totalUtangRev += p.sell; totalUtangProfit += p.sell - p.cost; }
+    totalUtangRev += p.sell;
   });
+  // Pending utang from parts
   state.parts.forEach(p => {
-    (p.utangEntries||[]).forEach(e => {
-      const inLedger = e.customer && (state.ledger||[]).some(le => le.name.toLowerCase() === e.customer.toLowerCase());
-      if (!inLedger) {
-        totalUtangRev    += Number(e.amt) || 0;
-        totalUtangProfit += (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
-      }
-    });
+    (p.utangEntries||[]).forEach(e => { totalUtangRev += Number(e.amt) || 0; });
   });
 
   const totalCap  = partsCap + wholeCap;
-  const totalRev  = partsSoldRev + wholeSoldRev + totalReceivedFromLedger;
-  // Profit = Revenue − Capital (correct: includes all received money)
-  const grossProfit = totalRev - totalCap;
+  // Revenue = cash sales + ledger money received
+  const totalRev  = partsSoldRev + wholeSoldRev + ledgerReceivedRev;
+  // Profit = margin on cash sales + margin on stock utang that's fully paid
+  // (avoids subtracting ALL capital when not everything is sold yet)
+  const cashProfit = partsSoldProfit + wholeSoldProfit;
+  // For stock utang fully paid: we know sell price and cost
+  let utangPaidProfit = 0;
+  wholePieces.forEach((p, i) => {
+    if (wst[i] !== 'utang') return;
+    const customer = (state.whole.statusMeta||{})[i];
+    const isPaid = customer && (state.ledger||[]).some(e => e.fullyPaid && e.name.toLowerCase() === customer.toLowerCase());
+    if (isPaid) utangPaidProfit += p.sell - p.cost;
+  });
+  state.parts.forEach(p => {
+    (p.utangEntries||[]).forEach(e => {
+      const isPaid = e.customer && (state.ledger||[]).some(le => le.fullyPaid && le.name.toLowerCase() === e.customer.toLowerCase());
+      if (isPaid) utangPaidProfit += (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
+    });
+  });
+  const grossProfit = cashProfit + utangPaidProfit;
   const totalExpenses = (state.expenses || []).reduce((a, e) => a + (Number(e.amount)||0), 0);
   const netProfit  = grossProfit - totalExpenses;
-  // Auto 50% partner split — no manual entry needed
+  // Auto 50% partner split
   const myShare    = netProfit * 0.5;
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
@@ -1107,18 +1120,17 @@ function renderSummary() {
   }
 
   // Cash to keep = Revenue − partner's 50% of net profit
-  const partnerShare = netProfit * 0.5;
+  const partnerShare = myShare; // partner gets same as you
   const cashToKeep  = totalRev - partnerShare;
   const keepEl = document.getElementById('totalKeep');
   if (keepEl) keepEl.textContent = fmt(cashToKeep);
   const keepBreak = document.getElementById('keepBreakdown');
   if (keepBreak) keepBreak.textContent =
-    `${fmt(totalRev)} revenue − ${fmt(partnerShare)} partner (50% of ₱${grossProfit.toFixed(2)} gross profit)`;
+    `${fmt(totalRev)} revenue − ${fmt(partnerShare)} partner's share (50% of ₱${netProfit.toFixed(2)} net profit)`;
   const pendingKeepEl = document.getElementById('pendingKeep');
   if (pendingKeepEl) {
-    const pendingKeep = totalUtangRev - totalUtangProfit * 0.5;
-    if (pendingKeep > 0) {
-      pendingKeepEl.textContent = `+ ${fmt(pendingKeep)} more when utang is paid`;
+    if (totalUtangRev > 0) {
+      pendingKeepEl.textContent = `+ ${fmt(totalUtangRev)} more when utang is paid`;
       pendingKeepEl.style.display = 'block';
     } else {
       pendingKeepEl.style.display = 'none';
