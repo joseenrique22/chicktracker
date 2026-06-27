@@ -67,6 +67,71 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
+  /* TABS */
+  .tab-bar {
+    max-width: 960px;
+    margin: 0 auto 24px;
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 20px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* DAILY */
+  .daily-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3,1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .daily-day-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .daily-day-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .daily-day-title { font-weight: 600; font-size: 14px; }
+  .daily-day-bal { font-family: 'Space Grotesk',sans-serif; font-size: 15px; font-weight: 700; }
+  .daily-day-body { display: none; padding: 0 16px 12px; }
+  .daily-day-body.open { display: block; }
+  .daily-entry-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+  .daily-entry-row:last-child { border-bottom: none; }
+  .daily-entry-desc { flex: 1; color: var(--text); }
+  .daily-entry-amt { font-weight: 600; font-family: 'Space Grotesk',sans-serif; }
+  .daily-entry-del { background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:0 4px; }
+  .daily-entry-del:hover { color: var(--red); }
+
   .card.keep::before { background: #a855f7; }
   .keep-label { font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em; }
   .keep-row { display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:3px;color:var(--label); }
@@ -632,6 +697,15 @@
   </div>
 </header>
 
+<!-- TABS -->
+<div class="tab-bar">
+  <button class="tab-btn active" id="tab-chick" onclick="switchTab('chick')">🐔 ChickTrack</button>
+  <button class="tab-btn" id="tab-daily" onclick="switchTab('daily')">📅 Daily</button>
+</div>
+
+<!-- CHICKTRACK TAB -->
+<div id="view-chick">
+
 <!-- SUMMARY CARDS -->
 <div class="summary-grid">
   <div class="card cap">
@@ -686,6 +760,44 @@
 <div class="section">
   <div class="section-title">📒 Utang Ledger</div>
   <div id="ledger-section"></div>
+</div>
+
+</div><!-- end view-chick -->
+
+<!-- DAILY TAB -->
+<div id="view-daily" style="display:none;max-width:960px;margin:0 auto;padding-bottom:60px">
+  <div class="daily-summary-grid">
+    <div class="card" style="border-top:2px solid var(--green)">
+      <div class="card-label">Total In</div>
+      <div class="card-value" id="d-totalIn" style="color:var(--green)">₱0.00</div>
+    </div>
+    <div class="card" style="border-top:2px solid var(--red)">
+      <div class="card-label">Total Out</div>
+      <div class="card-value" id="d-totalOut" style="color:var(--red)">₱0.00</div>
+    </div>
+    <div class="card" style="border-top:2px solid #a855f7">
+      <div class="card-label">Balance</div>
+      <div class="card-value" id="d-balance" style="color:#a855f7">₱0.00</div>
+    </div>
+  </div>
+
+  <!-- Add Entry -->
+  <div class="product-card" style="margin-bottom:16px">
+    <div style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Add Entry</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="date" id="d-date" class="ledger-add-input" style="max-width:150px">
+        <input type="text" id="d-desc" class="ledger-add-input" placeholder="Description (e.g. Food, Fare)" style="flex:2;min-width:140px">
+        <input type="number" id="d-amt" class="ledger-add-input" placeholder="₱ Amount" min="0" step="1" style="max-width:120px">
+        <div style="display:flex;gap:6px">
+          <button class="btn" style="background:#1a3a2a;color:var(--green);border:1px solid var(--green);padding:7px 14px" onclick="dailyAdd('in')">+ In</button>
+          <button class="btn" style="background:#3a1a1a;color:var(--red);border:1px solid var(--red);padding:7px 14px" onclick="dailyAdd('out')">− Out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="daily-list"></div>
 </div>
 
 <div class="footer-note">Tap any part row to adjust · Tap piece to mark sold/utang · ☁️ Syncs across devices</div>
@@ -1587,12 +1699,104 @@ function resetData() {
   render();
 }
 
+// ── TABS ──────────────────────────────────────────────
+function switchTab(tab) {
+  document.getElementById('view-chick').style.display = tab === 'chick' ? '' : 'none';
+  document.getElementById('view-daily').style.display = tab === 'daily' ? '' : 'none';
+  document.getElementById('tab-chick').classList.toggle('active', tab === 'chick');
+  document.getElementById('tab-daily').classList.toggle('active', tab === 'daily');
+  if (tab === 'daily') renderDaily();
+}
+
+// ── DAILY TRACKER ─────────────────────────────────────
+const DAILY_KEY = 'chicktrack-daily';
+
+function loadDaily() {
+  try { return JSON.parse(localStorage.getItem(DAILY_KEY)) || []; } catch(e) { return []; }
+}
+function saveDaily(data) {
+  localStorage.setItem(DAILY_KEY, JSON.stringify(data));
+}
+
+function dailyAdd(type) {
+  const date = document.getElementById('d-date').value;
+  const desc = document.getElementById('d-desc').value.trim();
+  const amt  = parseFloat(document.getElementById('d-amt').value) || 0;
+  if (!date || !desc || amt <= 0) return;
+  const data = loadDaily();
+  let day = data.find(d => d.date === date);
+  if (!day) { day = { date, entries: [] }; data.push(day); data.sort((a,b) => b.date.localeCompare(a.date)); }
+  day.entries.push({ type, desc, amt });
+  saveDaily(data);
+  document.getElementById('d-desc').value = '';
+  document.getElementById('d-amt').value = '';
+  renderDaily();
+}
+
+function dailyDel(date, idx) {
+  const data = loadDaily();
+  const day = data.find(d => d.date === date);
+  if (!day) return;
+  day.entries.splice(idx, 1);
+  if (!day.entries.length) data.splice(data.indexOf(day), 1);
+  saveDaily(data);
+  renderDaily();
+}
+
+function renderDaily() {
+  const data = loadDaily();
+  let totalIn = 0, totalOut = 0;
+  data.forEach(d => d.entries.forEach(e => {
+    if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
+  }));
+  const balance = totalIn - totalOut;
+  document.getElementById('d-totalIn').textContent  = fmt(totalIn);
+  document.getElementById('d-totalOut').textContent = fmt(totalOut);
+  const balEl = document.getElementById('d-balance');
+  balEl.textContent = fmt(balance);
+  balEl.style.color = balance >= 0 ? '#a855f7' : 'var(--red)';
+
+  const list = document.getElementById('daily-list');
+  if (!data.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No entries yet. Add your first entry above.</div>';
+    return;
+  }
+
+  list.innerHTML = data.map(d => {
+    const dayIn  = d.entries.filter(e => e.type==='in').reduce((a,e) => a+e.amt, 0);
+    const dayOut = d.entries.filter(e => e.type==='out').reduce((a,e) => a+e.amt, 0);
+    const dayBal = dayIn - dayOut;
+    const label  = new Date(d.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+    const rows = d.entries.map((e, i) => `
+      <div class="daily-entry-row">
+        <span style="font-size:16px">${e.type==='in' ? '💚' : '🔴'}</span>
+        <span class="daily-entry-desc">${e.desc}</span>
+        <span class="daily-entry-amt" style="color:${e.type==='in' ? 'var(--green)' : 'var(--red)'}">
+          ${e.type==='in' ? '+' : '−'}${fmt(e.amt)}
+        </span>
+        <button class="daily-entry-del" onclick="dailyDel('${d.date}',${i})">×</button>
+      </div>`).join('');
+    return `
+      <div class="daily-day-card">
+        <div class="daily-day-header" onclick="this.nextElementSibling.classList.toggle('open')">
+          <div>
+            <div class="daily-day-title">${label}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:2px">In ${fmt(dayIn)} · Out ${fmt(dayOut)}</div>
+          </div>
+          <div class="daily-day-bal" style="color:${dayBal>=0?'var(--green)':'var(--red)'}">${dayBal>=0?'+':''}${fmt(dayBal)}</div>
+        </div>
+        <div class="daily-day-body">${rows}</div>
+      </div>`;
+  }).join('');
+}
+
 // ── DATE ──────────────────────────────────────────────
 document.getElementById('dateTag').textContent = new Date().toLocaleDateString('en-PH', {
   weekday:'short', year:'numeric', month:'short', day:'numeric'
 });
 
 // ── INIT ──────────────────────────────────────────────
+document.getElementById('d-date').value = new Date().toISOString().slice(0,10);
 render();
 cloudLoad().then(cloudData => {
   if (cloudData) {
