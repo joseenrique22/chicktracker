@@ -463,6 +463,34 @@
   .qbtn-sold { background: var(--green); color: #fff; }
   .qbtn-utang { background: #f5a623; color: #000; }
 
+  /* CUSTOMER PICKER */
+  .cp-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.55); z-index: 1000;
+    align-items: center; justify-content: center;
+  }
+  .cp-overlay.open { display: flex; }
+  .cp-modal {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 22px 20px 16px; min-width: 260px; max-width: 340px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  }
+  .cp-title { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+  .cp-names { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .cp-name-btn {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 20px;
+    color: var(--text); padding: 6px 14px; font-size: 13px; cursor: pointer; transition: all 0.15s;
+  }
+  .cp-name-btn:hover, .cp-name-btn.selected { background: var(--accent); border-color: var(--accent); color: #000; }
+  .cp-input-row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .cp-new-input {
+    flex: 1; background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); padding: 7px 11px; font-size: 13px; outline: none;
+  }
+  .cp-new-input:focus { border-color: var(--accent); }
+  .cp-confirm { background: var(--accent); color: #000; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .cp-cancel { background: none; border: none; color: var(--muted); font-size: 12px; width: 100%; padding: 7px; cursor: pointer; margin-top: 4px; }
+
   /* LEDGER */
   .ledger-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -494,6 +522,9 @@
   .ledger-item-amt { font-family: 'Space Grotesk', sans-serif; font-weight: 600; }
   .ledger-item-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 2px; }
   .ledger-item-del:hover { color: var(--red); }
+  .ledger-item-row.stock { background: rgba(79,142,247,0.05); border-radius: 6px; padding: 5px 6px; }
+  .ledger-item-row.stock .ledger-item-desc { color: #4f8ef7; }
+  .stock-chip { font-size: 9px; background: rgba(79,142,247,0.2); color: #4f8ef7; border-radius: 10px; padding: 1px 6px; font-weight: 600; margin-right: 4px; vertical-align: middle; }
 
   .ledger-payments { padding: 6px 16px 6px; background: var(--surface2); border-top: 1px solid var(--border); }
   .ledger-pay-row {
@@ -558,6 +589,19 @@
 </style>
 </head>
 <body>
+
+<!-- CUSTOMER PICKER MODAL -->
+<div class="cp-overlay" id="cpOverlay" onclick="closeCPicker(event)">
+  <div class="cp-modal">
+    <div class="cp-title">Who is this for?</div>
+    <div class="cp-names" id="cpNames"></div>
+    <div class="cp-input-row">
+      <input class="cp-new-input" id="cpNewName" type="text" placeholder="New customer name">
+      <button class="cp-confirm" onclick="confirmCPicker()">OK</button>
+    </div>
+    <button class="cp-cancel" onclick="closeCPickerBtn()">Cancel</button>
+  </div>
+</div>
 
 <!-- PIECE STATUS MODAL -->
 <div class="piece-modal-overlay" id="pieceModalOverlay" onclick="closePieceModal(event)">
@@ -697,8 +741,8 @@ const defaultLedger = [
 ];
 
 const defaultState = {
-  parts: parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 })),
-  whole: { status: wholePieces.map(() => null) },
+  parts: parts.map(p => ({ ...p, soldKg: 0, utangEntries: [] })),
+  whole: { status: wholePieces.map(() => null), statusMeta: {} },
   expenses: [],
   splits: [],
   ledger: defaultLedger,
@@ -708,6 +752,14 @@ let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
 const state = localSaved || JSON.parse(JSON.stringify(defaultState));
 if (!state.ledger) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+if (!state.whole.statusMeta) state.whole.statusMeta = {};
+// migrate utangKg → utangEntries per part
+state.parts.forEach(p => {
+  if (!p.utangEntries) {
+    p.utangEntries = p.utangKg > 0 ? [{ kg: p.utangKg, amt: +(p.utangKg * p.sellPkg).toFixed(2), customer: null }] : [];
+    delete p.utangKg;
+  }
+});
 let _ledgerIdSeq = Math.max(0, ...(state.ledger.map(e => e.id || 0))) + 1;
 
 // ── HELPERS ───────────────────────────────────────────
@@ -726,7 +778,7 @@ function renderParts() {
   container.innerHTML = '';
 
   state.parts.forEach((p, idx) => {
-    const utangKg = p.utangKg || 0;
+    const utangKg = (p.utangEntries || []).reduce((s, e) => s + e.kg, 0);
     const capital = p.kg * p.buyPkg;
     const soldRev = p.soldKg * p.sellPkg;
     const soldProfit = p.soldKg * (p.sellPkg - p.buyPkg);
@@ -778,7 +830,7 @@ function renderParts() {
           </div>
           <div class="input-group">
             <label>Utang (kg)</label>
-            <input type="number" id="utang-${p.id}" value="${utangKg}" min="0" step="0.1" placeholder="0.00">
+            <input type="text" id="utang-${p.id}" value="${utangKg.toFixed(2)}" readonly style="opacity:0.6;cursor:default">
           </div>
           <div class="input-group">
             <label>Buy/kg</label>
@@ -1014,9 +1066,10 @@ function renderLedger() {
   const active = ledger.filter(e => !e.fullyPaid);
   const done   = ledger.filter(e => e.fullyPaid);
   const totalOwed = active.reduce((a, e) => {
-    const tot = e.items.reduce((s, it) => s + it.amt, 0);
+    const manualTot = e.items.reduce((s, it) => s + it.amt, 0);
+    const stockTot  = getStockItemsForCustomer(e.name).reduce((s, it) => s + it.amt, 0);
     const paid = e.payments.reduce((s, p) => s + p.amt, 0);
-    return a + Math.max(0, tot - paid);
+    return a + Math.max(0, manualTot + stockTot - paid);
   }, 0);
   const totalCollected = ledger.reduce((a, e) => a + e.payments.reduce((s, p) => s + p.amt, 0), 0);
 
@@ -1029,21 +1082,35 @@ function renderLedger() {
     </div>`;
 
   const cardHTML = (e) => {
-    const total = e.items.reduce((s, it) => s + it.amt, 0);
+    const stockItems = getStockItemsForCustomer(e.name);
+    const manualTotal = e.items.reduce((s, it) => s + it.amt, 0);
+    const stockTotal  = stockItems.reduce((s, it) => s + it.amt, 0);
+    const total = manualTotal + stockTotal;
     const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
     const rem   = Math.max(0, total - paid);
-    const itemRows = e.items.map((it, ii) => `
+
+    const manualRows = e.items.map((it, ii) => `
       <div class="ledger-item-row">
         <span class="ledger-item-desc">${it.desc}</span>
         <span class="ledger-item-amt">${fmt(it.amt)}</span>
         <button class="ledger-item-del" onclick="ledgerDelItem(${e.id},${ii})" title="Remove item">×</button>
       </div>`).join('');
+
+    const stockRows = stockItems.map(it => `
+      <div class="ledger-item-row stock">
+        <span class="ledger-item-desc"><span class="stock-chip">STOCK</span>${it.desc}</span>
+        <span class="ledger-item-amt" style="color:#4f8ef7">${fmt(it.amt)}</span>
+        <button class="ledger-item-del" onclick="clearStockItem('${it.ref}')" title="Clear from stock">×</button>
+      </div>`).join('');
+
     const payRows = e.payments.length ? e.payments.map((p, pi) => `
       <div class="ledger-pay-row">
         <span>${p.note || 'Payment'}</span>
         <span class="ledger-pay-amt">+${fmt(p.amt)}</span>
         <button class="ledger-pay-del" onclick="ledgerDelPay(${e.id},${pi})">×</button>
       </div>`).join('') : '<div style="font-size:11px;color:var(--muted);padding:4px 0">No payments yet</div>';
+
+    const hasItems = manualRows || stockRows;
 
     return `
     <div class="ledger-card${e.fullyPaid ? ' paid-out' : ''}" id="lcard-${e.id}">
@@ -1056,12 +1123,12 @@ function renderLedger() {
       </div>
       <div class="ledger-body" id="lbody-${e.id}">
         <div class="ledger-items">
-          ${itemRows}
-          <div class="ledger-item-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px">
+          ${hasItems ? (manualRows + stockRows) : '<div style="font-size:12px;color:var(--muted);padding:4px 0">No items yet</div>'}
+          ${total > 0 ? `<div class="ledger-item-row" style="border-top:1px solid var(--border);margin-top:4px;padding-top:6px">
             <span class="ledger-item-desc" style="color:var(--text);font-weight:500">Total</span>
             <span class="ledger-item-amt">${fmt(total)}</span>
             <span style="width:22px"></span>
-          </div>
+          </div>` : ''}
         </div>
         <div class="ledger-payments">
           <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:4px">Payments</div>
@@ -1209,26 +1276,33 @@ function quickAddPart(id, type) {
   const p = state.parts[idx];
   if (!p.sellPkg) return;
   const kg = amount / p.sellPkg;
-  const avail = Math.max(0, p.kg - p.soldKg - (p.utangKg || 0));
+  const utangKg = (p.utangEntries || []).reduce((s, e) => s + e.kg, 0);
+  const avail = Math.max(0, p.kg - p.soldKg - utangKg);
   const add = Math.min(kg, avail);
-  if (type === 'sold') p.soldKg += add;
-  else p.utangKg = (p.utangKg || 0) + add;
-  document.getElementById('qkg-'+id).value = '';
-  saveState();
-  renderParts();
-  renderSummary();
+  if (type === 'sold') {
+    p.soldKg += add;
+    document.getElementById('qkg-'+id).value = '';
+    saveState(); renderParts(); renderSummary();
+  } else {
+    // utang — ask customer
+    document.getElementById('qkg-'+id).value = '';
+    openCPicker((customer) => {
+      if (!p.utangEntries) p.utangEntries = [];
+      p.utangEntries.push({ kg: add, amt: amount, customer });
+      ensureLedgerEntry(customer);
+      saveState(); renderParts(); renderLedger(); renderSummary();
+    });
+  }
 }
 
 function updatePart(id) {
   const idx = state.parts.findIndex(p => p.id === id);
   if (idx === -1) return;
   const soldKg = parseFloat(document.getElementById('sold-'+id).value) || 0;
-  const utangKg = parseFloat(document.getElementById('utang-'+id).value) || 0;
   const buyPkg = parseFloat(document.getElementById('buy-'+id).value) || 0;
   const sellPkg = parseFloat(document.getElementById('sell-'+id).value) || 0;
   const totalKg = parseFloat(document.getElementById('total-'+id).value) || 0;
   state.parts[idx].soldKg = Math.min(soldKg, totalKg);
-  state.parts[idx].utangKg = Math.min(utangKg, Math.max(0, totalKg - soldKg));
   state.parts[idx].buyPkg = buyPkg;
   state.parts[idx].sellPkg = sellPkg;
   state.parts[idx].kg = totalKg;
@@ -1238,12 +1312,12 @@ function updatePart(id) {
 }
 
 function getWholeStatus() {
-  // migrate old boolean sold array
   if (state.whole.sold && !state.whole.status) {
     state.whole.status = state.whole.sold.map(v => v ? 'sold' : null);
     delete state.whole.sold;
   }
   if (!state.whole.status) state.whole.status = wholePieces.map(() => null);
+  if (!state.whole.statusMeta) state.whole.statusMeta = {};
   return state.whole.status;
 }
 
@@ -1266,16 +1340,109 @@ function closePieceModal(e) {
 function setPieceStatus(s) {
   if (_modalIdx === null) return;
   getWholeStatus();
-  state.whole.status[_modalIdx] = s;
-  document.getElementById('pieceModalOverlay').classList.remove('open');
-  _modalIdx = null;
-  saveState(); renderWhole(); renderSummary();
+  if (s === 'utang') {
+    const savedIdx = _modalIdx;
+    document.getElementById('pieceModalOverlay').classList.remove('open');
+    _modalIdx = null;
+    openCPicker((customer) => {
+      state.whole.status[savedIdx] = 'utang';
+      state.whole.statusMeta[savedIdx] = customer;
+      ensureLedgerEntry(customer);
+      saveState(); renderWhole(); renderLedger(); renderSummary();
+    });
+  } else {
+    // clear statusMeta if changing away from utang
+    delete state.whole.statusMeta[_modalIdx];
+    state.whole.status[_modalIdx] = s;
+    document.getElementById('pieceModalOverlay').classList.remove('open');
+    _modalIdx = null;
+    saveState(); renderWhole(); renderLedger(); renderSummary();
+  }
+}
+
+// ── CUSTOMER PICKER ───────────────────────────────────
+let _cpCallback = null;
+function openCPicker(cb) {
+  _cpCallback = cb;
+  const names = (state.ledger || []).filter(e => !e.fullyPaid).map(e => e.name);
+  document.getElementById('cpNames').innerHTML = names.map(n =>
+    `<button class="cp-name-btn" onclick="selectCPicker(this,'${n.replace(/'/g,"\\'")}')">${n}</button>`
+  ).join('');
+  document.getElementById('cpNewName').value = '';
+  document.getElementById('cpOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('cpNewName').focus(), 100);
+}
+function closeCPicker(e) {
+  if (e && e.target !== document.getElementById('cpOverlay')) return;
+  document.getElementById('cpOverlay').classList.remove('open');
+  _cpCallback = null;
+}
+function closeCPickerBtn() {
+  document.getElementById('cpOverlay').classList.remove('open');
+  _cpCallback = null;
+}
+function selectCPicker(btn, name) {
+  document.querySelectorAll('.cp-name-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+  document.getElementById('cpNewName').value = name;
+}
+function confirmCPicker() {
+  const name = document.getElementById('cpNewName').value.trim();
+  if (!name || !_cpCallback) return;
+  document.getElementById('cpOverlay').classList.remove('open');
+  const cb = _cpCallback;
+  _cpCallback = null;
+  cb(name);
+}
+
+function ensureLedgerEntry(name) {
+  if (!state.ledger) state.ledger = [];
+  const existing = state.ledger.find(e => e.name.toLowerCase() === name.toLowerCase());
+  if (!existing) {
+    state.ledger.push({ id: _ledgerIdSeq++, name, items: [], payments: [], fullyPaid: false });
+  }
+}
+
+function getStockItemsForCustomer(name) {
+  const items = [];
+  const status = getWholeStatus();
+  const meta = state.whole.statusMeta || {};
+  status.forEach((s, i) => {
+    if (s === 'utang' && meta[i] && meta[i].toLowerCase() === name.toLowerCase()) {
+      const p = wholePieces[i];
+      items.push({ desc: `Whole Chicken #${i+1} (${p.kg}kg)`, amt: p.sell, ref: `whole:${i}` });
+    }
+  });
+  state.parts.forEach(p => {
+    (p.utangEntries || []).forEach((e, ei) => {
+      if (e.customer && e.customer.toLowerCase() === name.toLowerCase()) {
+        items.push({ desc: `${p.name} ${fmtKg(e.kg)}`, amt: e.amt, ref: `part:${p.id}:${ei}` });
+      }
+    });
+  });
+  return items;
+}
+
+function clearStockItem(ref) {
+  const parts2 = ref.split(':');
+  if (parts2[0] === 'whole') {
+    const i = parseInt(parts2[1]);
+    getWholeStatus();
+    state.whole.status[i] = null;
+    delete state.whole.statusMeta[i];
+  } else if (parts2[0] === 'part') {
+    const partId = parts2[1];
+    const ei = parseInt(parts2[2]);
+    const p = state.parts.find(p => p.id === partId);
+    if (p && p.utangEntries) p.utangEntries.splice(ei, 1);
+  }
+  saveState(); renderParts(); renderWhole(); renderLedger(); renderSummary();
 }
 
 function resetData() {
   if (!confirm('Reset all sales data back to zero?')) return;
-  state.parts = parts.map(p => ({ ...p, soldKg: 0, utangKg: 0 }));
-  state.whole = { status: wholePieces.map(() => null) };
+  state.parts = parts.map(p => ({ ...p, soldKg: 0, utangEntries: [] }));
+  state.whole = { status: wholePieces.map(() => null), statusMeta: {} };
   state.expenses = [];
   state.splits = [];
   state.ledger = JSON.parse(JSON.stringify(defaultLedger));
