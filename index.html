@@ -67,6 +67,10 @@
     grid-template-columns: repeat(3, 1fr);
     gap: 12px;
   }
+  .card.keep::before { background: #a855f7; }
+  .keep-label { font-size:11px;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.08em; }
+  .keep-row { display:flex;justify-content:space-between;align-items:center;font-size:12px;margin-top:3px;color:var(--label); }
+  .keep-row span:last-child { font-weight:600; }
 
   .card {
     background: var(--surface);
@@ -642,10 +646,22 @@
     <div id="pendingRev" style="display:none;font-size:11px;margin-top:5px;color:#f5a623;font-weight:600;letter-spacing:0.02em"></div>
   </div>
   <div class="card pro">
-    <div class="card-label">Profit (Sold)</div>
+    <div class="card-label">Your Profit (50%)</div>
     <div class="card-value" id="totalPro">—</div>
     <div class="card-sub" id="totalProSub"></div>
     <div id="pendingProfit" style="display:none;font-size:11px;margin-top:5px;color:#f5a623;font-weight:600;letter-spacing:0.02em"></div>
+  </div>
+</div>
+<!-- CASH TO KEEP CARD -->
+<div style="max-width:960px;margin:-16px auto 28px">
+  <div class="card keep">
+    <div class="card-label">💰 Cash to Keep (Revenue − Partner's Share)</div>
+    <div class="card-value" id="totalKeep" style="color:#a855f7">—</div>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:8px">
+      <div class="keep-row"><span>Revenue collected</span></div>
+      <div id="keepBreakdown" style="font-size:12px;color:var(--label);margin-top:2px"></div>
+    </div>
+    <div id="pendingKeep" style="display:none;font-size:11px;margin-top:5px;color:#f5a623;font-weight:600;letter-spacing:0.02em"></div>
   </div>
 </div>
 
@@ -1072,6 +1088,25 @@ function renderSummary() {
       pendingEl.style.display = 'block';
     } else {
       pendingEl.style.display = 'none';
+    }
+  }
+
+  // Cash to keep = Revenue − partner's 50% profit share
+  const partnerShare = grossProfit * 0.5;
+  const cashToKeep  = totalRev - partnerShare;
+  const keepEl = document.getElementById('totalKeep');
+  if (keepEl) keepEl.textContent = fmt(cashToKeep);
+  const keepBreak = document.getElementById('keepBreakdown');
+  if (keepBreak) keepBreak.textContent =
+    `${fmt(totalRev)} revenue − ${fmt(partnerShare)} partner (50% of ₱${grossProfit.toFixed(2)} gross profit)`;
+  const pendingKeepEl = document.getElementById('pendingKeep');
+  if (pendingKeepEl) {
+    const pendingKeep = totalUtangRev - totalUtangProfit * 0.5;
+    if (pendingKeep > 0) {
+      pendingKeepEl.textContent = `+ ${fmt(pendingKeep)} more when utang is paid`;
+      pendingKeepEl.style.display = 'block';
+    } else {
+      pendingKeepEl.style.display = 'none';
     }
   }
 }
