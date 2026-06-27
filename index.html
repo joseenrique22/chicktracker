@@ -787,8 +787,21 @@ function normalizeState() {
 
   // Ensure whole object
   if (!state.whole || typeof state.whole !== 'object') state.whole = {};
-  if (!Array.isArray(state.whole.status)) state.whole.status = toArray(state.whole.status);
-  if (state.whole.status.length !== wholePieces.length) state.whole.status = wholePieces.map(() => null);
+  if (!Array.isArray(state.whole.status)) {
+    // Firebase strips null entries from arrays, storing e.g. {"2":"utang"}.
+    // Rebuild by index so we don't lose non-null values at the right positions.
+    const raw = state.whole.status;
+    const arr = new Array(wholePieces.length).fill(null);
+    if (raw && typeof raw === 'object') {
+      Object.entries(raw).forEach(([k, v]) => {
+        const idx = parseInt(k);
+        if (!isNaN(idx) && idx >= 0 && idx < wholePieces.length) arr[idx] = v || null;
+      });
+    }
+    state.whole.status = arr;
+  } else if (state.whole.status.length !== wholePieces.length) {
+    state.whole.status = wholePieces.map(() => null);
+  }
   if (!state.whole.statusMeta || typeof state.whole.statusMeta !== 'object' || Array.isArray(state.whole.statusMeta))
     state.whole.statusMeta = {};
 
