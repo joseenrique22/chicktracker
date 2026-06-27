@@ -751,7 +751,7 @@ const defaultState = {
 let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
 const state = localSaved || JSON.parse(JSON.stringify(defaultState));
-if (!state.ledger) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+if (!state.ledger || state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
 if (!state.whole.statusMeta) state.whole.statusMeta = {};
 // migrate utangKg → utangEntries per part
 state.parts.forEach(p => {
@@ -760,6 +760,21 @@ state.parts.forEach(p => {
     delete p.utangKg;
   }
 });
+function normalizeLedger() {
+  // Firebase strips empty arrays to null — restore them
+  (state.ledger || []).forEach(e => {
+    if (!Array.isArray(e.items)) e.items = e.items ? Object.values(e.items) : [];
+    if (!Array.isArray(e.payments)) e.payments = e.payments ? Object.values(e.payments) : [];
+  });
+  state.parts.forEach(p => {
+    if (!Array.isArray(p.utangEntries)) p.utangEntries = p.utangEntries ? Object.values(p.utangEntries) : [];
+  });
+  if (!state.whole.statusMeta) state.whole.statusMeta = {};
+  if (!Array.isArray(state.expenses)) state.expenses = state.expenses ? Object.values(state.expenses) : [];
+  if (!Array.isArray(state.splits)) state.splits = state.splits ? Object.values(state.splits) : [];
+  if (!Array.isArray(state.whole.status)) state.whole.status = wholePieces.map(() => null);
+}
+normalizeLedger();
 let _ledgerIdSeq = Math.max(0, ...((state.ledger || []).map(e => e.id || 0)), 0) + 1;
 
 // ── HELPERS ───────────────────────────────────────────
@@ -1066,9 +1081,9 @@ function renderLedger() {
   const active = ledger.filter(e => !e.fullyPaid);
   const done   = ledger.filter(e => e.fullyPaid);
   const totalOwed = active.reduce((a, e) => {
-    const manualTot = e.items.reduce((s, it) => s + it.amt, 0);
+    const manualTot = (e.items || []).reduce((s, it) => s + it.amt, 0);
     const stockTot  = getStockItemsForCustomer(e.name).reduce((s, it) => s + it.amt, 0);
-    const paid = e.payments.reduce((s, p) => s + p.amt, 0);
+    const paid = (e.payments || []).reduce((s, p) => s + p.amt, 0);
     return a + Math.max(0, manualTot + stockTot - paid);
   }, 0);
   const totalCollected = ledger.reduce((a, e) => a + e.payments.reduce((s, p) => s + p.amt, 0), 0);
@@ -1083,13 +1098,13 @@ function renderLedger() {
 
   const cardHTML = (e) => {
     const stockItems = getStockItemsForCustomer(e.name);
-    const manualTotal = e.items.reduce((s, it) => s + it.amt, 0);
+    const manualTotal = (e.items || []).reduce((s, it) => s + it.amt, 0);
     const stockTotal  = stockItems.reduce((s, it) => s + it.amt, 0);
     const total = manualTotal + stockTotal;
-    const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
+    const paid  = (e.payments || []).reduce((s, p) => s + p.amt, 0);
     const rem   = Math.max(0, total - paid);
 
-    const manualRows = e.items.map((it, ii) => `
+    const manualRows = (e.items || []).map((it, ii) => `
       <div class="ledger-item-row">
         <span class="ledger-item-desc">${it.desc}</span>
         <span class="ledger-item-amt">${fmt(it.amt)}</span>
@@ -1103,7 +1118,7 @@ function renderLedger() {
         <button class="ledger-item-del" onclick="clearStockItem('${it.ref}')" title="Clear from stock">×</button>
       </div>`).join('');
 
-    const payRows = e.payments.length ? e.payments.map((p, pi) => `
+    const payRows = (e.payments || []).length ? (e.payments || []).map((p, pi) => `
       <div class="ledger-pay-row">
         <span>${p.note || 'Payment'}</span>
         <span class="ledger-pay-amt">+${fmt(p.amt)}</span>
@@ -1460,23 +1475,14 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 render();
 cloudLoad().then(cloudData => {
   if (cloudData) {
-    // Preserve fields that may be missing from older cloud saves
     const localLedger = state.ledger ? JSON.parse(JSON.stringify(state.ledger)) : null;
-    const localSplits = state.splits ? [...state.splits] : [];
     Object.assign(state, cloudData);
     // Keep whichever ledger has more entries (local wins on tie)
-    if (!state.ledger || (localLedger && localLedger.length >= state.ledger.length)) {
+    const cloudLedgerLen = Array.isArray(state.ledger) ? state.ledger.length : 0;
+    if (!cloudLedgerLen || (localLedger && localLedger.length >= cloudLedgerLen)) {
       state.ledger = localLedger || JSON.parse(JSON.stringify(defaultLedger));
     }
-    if (!state.splits) state.splits = localSplits;
-    if (!state.whole.statusMeta) state.whole.statusMeta = {};
-    // re-run part migration after cloud merge
-    state.parts.forEach(p => {
-      if (!p.utangEntries) {
-        p.utangEntries = p.utangKg > 0 ? [{ kg: p.utangKg, amt: +(p.utangKg * p.sellPkg).toFixed(2), customer: null }] : [];
-        delete p.utangKg;
-      }
-    });
+    normalizeLedger();
     _ledgerIdSeq = Math.max(_ledgerIdSeq, ...((state.ledger || []).map(e => e.id || 0)), 0) + 1;
     localStorage.setItem('chicktrack', JSON.stringify(state));
     render();
