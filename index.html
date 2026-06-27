@@ -1026,25 +1026,43 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // For each ledger entry, compute received revenue + proportional profit
+  // Blended margin rate from all known items (used as fallback for manual ledger entries)
+  const potentialRev  = parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + wholePieces.reduce((a,p) => a + p.sell, 0);
+  const potentialCost = parts.reduce((a,p) => a + p.kg * p.buyPkg, 0)  + wholePieces.reduce((a,p) => a + p.cost, 0);
+  const blendedMargin = potentialRev > 0 ? (potentialRev - potentialCost) / potentialRev : 0;
+
+  // Helper: estimate margin for a manual item by matching description to known parts
+  function itemMarginRate(desc) {
+    const d = (desc||'').toLowerCase();
+    for (const p of parts) {
+      if (d.includes(p.name.toLowerCase()))
+        return (p.sellPkg - p.buyPkg) / p.sellPkg;
+    }
+    if (d.includes('whole')) {
+      const avgSell = wholePieces.reduce((a,p) => a + p.sell, 0) / wholePieces.length;
+      const avgCost = wholePieces.reduce((a,p) => a + p.cost, 0) / wholePieces.length;
+      return (avgSell - avgCost) / avgSell;
+    }
+    return blendedMargin;
+  }
+
   let ledgerReceivedRev = 0, ledgerReceivedProfit = 0, totalUtangRev = 0;
+  const linkedUtangNames = new Set();
 
   (state.ledger||[]).forEach(e => {
     const paid = (e.payments||[]).reduce((s,p) => s + (Number(p.amt)||0), 0);
-
-    // Compute total owed and known profit margin for this customer's stock items
     const manualTotal = (e.items||[]).reduce((s,it) => s + (Number(it.amt)||0), 0);
     const stockItems  = getStockItemsForCustomer(e.name);
     const stockTotal  = stockItems.reduce((s,it) => s + (Number(it.amt)||0), 0);
     const totalOwed   = manualTotal + stockTotal;
+    linkedUtangNames.add(e.name.toLowerCase());
 
-    // Calculate stock profit for this customer (known margins)
+    // Margin from stock items (exact)
     let stockProfit = 0;
     wholePieces.forEach((p, i) => {
       if (wst[i] !== 'utang') return;
-      const customer = (state.whole.statusMeta||{})[i];
-      if (customer && customer.toLowerCase() === e.name.toLowerCase())
-        stockProfit += p.sell - p.cost;
+      const cust = (state.whole.statusMeta||{})[i];
+      if (cust && cust.toLowerCase() === e.name.toLowerCase()) stockProfit += p.sell - p.cost;
     });
     state.parts.forEach(p => {
       (p.utangEntries||[]).forEach(ue => {
@@ -1053,24 +1071,29 @@ function renderSummary() {
       });
     });
 
-    // Profit margin rate based on stock items (what we know)
-    const marginRate = stockTotal > 0 ? stockProfit / stockTotal : 0;
-    // Amount actually received
+    // Margin from manual items (by description lookup)
+    let manualProfit = (e.items||[]).reduce((a,it) => a + (Number(it.amt)||0) * itemMarginRate(it.desc), 0);
+
+    const totalKnownProfit = stockProfit + manualProfit;
+    const marginRate = totalOwed > 0 ? totalKnownProfit / totalOwed : blendedMargin;
+
     const received = e.fullyPaid ? (totalOwed || paid) : paid;
     ledgerReceivedRev    += received;
-    // Profit on received = received × margin rate
     ledgerReceivedProfit += received * marginRate;
-    // Remaining pending
     if (!e.fullyPaid) totalUtangRev += Math.max(0, totalOwed - paid);
   });
 
-  // Pending utang not yet in any ledger entry
+  // Pending utang not linked to any ledger entry
   wholePieces.forEach((p, i) => {
     if (wst[i] !== 'utang') return;
-    totalUtangRev += p.sell;
+    const cust = (state.whole.statusMeta||{})[i];
+    if (!cust || !linkedUtangNames.has(cust.toLowerCase())) totalUtangRev += p.sell;
   });
   state.parts.forEach(p => {
-    (p.utangEntries||[]).forEach(e => { totalUtangRev += Number(e.amt) || 0; });
+    (p.utangEntries||[]).forEach(e => {
+      if (!e.customer || !linkedUtangNames.has(e.customer.toLowerCase()))
+        totalUtangRev += Number(e.amt) || 0;
+    });
   });
 
   const totalCap    = partsCap + wholeCap;
