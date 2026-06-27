@@ -1015,27 +1015,38 @@ function renderSummary() {
   }, 0);
   const totalPotentialRevWhole = wholePieces.reduce((a,p) => a + p.sell, 0);
 
-  // Pending (utang) revenue + profit
-  const partsUtangRev = state.parts.reduce((a,p) => {
-    return a + (p.utangEntries||[]).reduce((s,e) => s + Number(e.amt), 0);
-  }, 0);
-  const wholeUtangRev = wholePieces.reduce((a,p,i) => {
-    return wst[i] === 'utang' ? a + p.sell : a;
-  }, 0);
-  const totalUtangRev = partsUtangRev + wholeUtangRev;
+  // Fully paid customers — their utang counts as real revenue/profit
+  const paidNames = new Set((state.ledger||[]).filter(e => e.fullyPaid).map(e => e.name.toLowerCase()));
 
-  const partsUtangProfit = state.parts.reduce((a,p) => {
-    const uKg = (p.utangEntries||[]).reduce((s,e) => s+e.kg, 0);
-    return a + uKg * (p.sellPkg - p.buyPkg);
-  }, 0);
-  const wholeUtangProfit = wholePieces.reduce((a,p,i) => {
-    return wst[i] === 'utang' ? a + p.sell - p.cost : a;
-  }, 0);
-  const totalUtangProfit = partsUtangProfit + wholeUtangProfit;
+  // Pending (utang) revenue + profit — split by paid vs still pending
+  let partsUtangRevPaid = 0, partsUtangRevPending = 0;
+  let partsUtangProfitPaid = 0, partsUtangProfitPending = 0;
+  state.parts.forEach(p => {
+    (p.utangEntries||[]).forEach(e => {
+      const isPaid = e.customer && paidNames.has(e.customer.toLowerCase());
+      const rev = Number(e.amt) || 0;
+      const profit = (Number(e.kg)||0) * ((Number(p.sellPkg)||0) - (Number(p.buyPkg)||0));
+      if (isPaid) { partsUtangRevPaid += rev; partsUtangProfitPaid += profit; }
+      else         { partsUtangRevPending += rev; partsUtangProfitPending += profit; }
+    });
+  });
 
-  const totalCap = partsCap + wholeCap;
-  const totalRev = partsSoldRev + wholeSoldRev;
-  const totalProfit = partsSoldProfit + wholeSoldProfit;
+  let wholeUtangRevPaid = 0, wholeUtangRevPending = 0;
+  let wholeUtangProfitPaid = 0, wholeUtangProfitPending = 0;
+  wholePieces.forEach((p, i) => {
+    if (wst[i] !== 'utang') return;
+    const customer = (state.whole.statusMeta||{})[i];
+    const isPaid = customer && paidNames.has(customer.toLowerCase());
+    if (isPaid) { wholeUtangRevPaid += p.sell; wholeUtangProfitPaid += p.sell - p.cost; }
+    else         { wholeUtangRevPending += p.sell; wholeUtangProfitPending += p.sell - p.cost; }
+  });
+
+  const totalUtangRev    = wholeUtangRevPending    + partsUtangRevPending;
+  const totalUtangProfit = wholeUtangProfitPending + partsUtangProfitPending;
+
+  const totalCap    = partsCap + wholeCap;
+  const totalRev    = partsSoldRev + wholeSoldRev + partsUtangRevPaid + wholeUtangRevPaid;
+  const totalProfit = partsSoldProfit + wholeSoldProfit + partsUtangProfitPaid + wholeUtangProfitPaid;
 
   const totalPotentialRev = state.parts.reduce((a,p) => a + p.kg * p.sellPkg, 0) + totalPotentialRevWhole;
 
