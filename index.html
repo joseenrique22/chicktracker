@@ -1936,10 +1936,13 @@ function walletSetOpening() {
   renderWallet();
 }
 
-function _walletBudgetRemaining(w) {
-  const dailyOutTotal = loadDailyData().reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  const transferred   = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
-  return w.dailyBudgetOpening - dailyOutTotal - transferred;
+function _walletBudgetStats(w) {
+  const dailyData    = loadDailyData();
+  const dailyIn      = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
+  const dailyOut     = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
+  const transferred  = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
+  const remaining    = w.dailyBudgetOpening + dailyIn - dailyOut - transferred;
+  return { dailyIn, dailyOut, transferred, remaining };
 }
 
 function walletToPocket() {
@@ -1947,7 +1950,7 @@ function walletToPocket() {
   const note = document.getElementById('w-to-pocket-note').value.trim();
   if (amt <= 0) return;
   const w = loadWallet();
-  const budget = _walletBudgetRemaining(w);
+  const { remaining: budget } = _walletBudgetStats(w);
   if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
   w.transfers.unshift({ date: today, amt, to: 'pocket', note: note || 'To Pocket Savings' });
@@ -1963,7 +1966,7 @@ function walletToSavings() {
   const note = document.getElementById('w-to-savings-note').value.trim();
   if (amt <= 0) return;
   const w = loadWallet();
-  const budget = _walletBudgetRemaining(w);
+  const { remaining: budget } = _walletBudgetStats(w);
   if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
   w.transfers.unshift({ date: today, amt, to: 'savings', note: note || 'To Savings' });
@@ -1990,10 +1993,7 @@ function walletDelTransfer(idx) {
 
 function renderWallet() {
   const w = loadWallet();
-  const dailyData    = loadDailyData();
-  const dailyOutTotal = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  const transferred  = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
-  const budget       = w.dailyBudgetOpening - dailyOutTotal - transferred;
+  const { dailyIn, dailyOut, remaining: budget } = _walletBudgetStats(w);
   const pocketTotal  = w.pocketSavings.reduce((a,e) => a + (Number(e.amt)||0), 0);
   const savingsTotal = w.savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
 
@@ -2003,7 +2003,7 @@ function renderWallet() {
   const budgetEl = document.getElementById('w-daily-budget');
   if (budgetEl) { budgetEl.textContent = fmt(budget); budgetEl.style.color = budget >= 0 ? 'var(--accent2)' : 'var(--red)'; }
   const budgetSub = document.getElementById('w-daily-budget-sub');
-  if (budgetSub) budgetSub.textContent = `Opening ${fmt(w.dailyBudgetOpening)} · Spent ${fmt(dailyOutTotal)}`;
+  if (budgetSub) budgetSub.textContent = `Opening ${fmt(w.dailyBudgetOpening)} · +${fmt(dailyIn)} In · −${fmt(dailyOut)} Out`;
 
   const pocketEl = document.getElementById('w-pocket');
   if (pocketEl) pocketEl.textContent = fmt(pocketTotal);
