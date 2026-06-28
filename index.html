@@ -804,35 +804,63 @@
 <!-- WALLET TAB -->
 <div id="view-wallet" style="display:none;max-width:960px;margin:0 auto;padding-bottom:60px">
 
-  <!-- Pocket + Savings cards -->
-  <div class="daily-summary-grid" style="margin-bottom:16px">
-    <div class="card" style="border-top:2px solid var(--accent);grid-column:span 1">
-      <div class="card-label">👝 Pocket Money</div>
+  <!-- 3 pot cards -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+    <div class="card" style="border-top:2px solid var(--accent2)">
+      <div class="card-label">📅 Daily Budget</div>
+      <div class="card-value" id="w-daily-budget" style="color:var(--accent2)">₱0.00</div>
+      <div class="card-sub" id="w-daily-budget-sub"></div>
+    </div>
+    <div class="card" style="border-top:2px solid var(--accent)">
+      <div class="card-label">👝 Pocket Savings</div>
       <div class="card-value" id="w-pocket" style="color:var(--accent)">₱0.00</div>
       <div class="card-sub" id="w-pocket-sub"></div>
     </div>
-    <div class="card" style="border-top:2px solid var(--green);grid-column:span 2">
+    <div class="card" style="border-top:2px solid var(--green)">
       <div class="card-label">🏦 Savings</div>
       <div class="card-value" id="w-savings" style="color:var(--green)">₱0.00</div>
       <div class="card-sub" id="w-savings-sub"></div>
     </div>
   </div>
 
-  <!-- Move to Savings -->
-  <div class="product-card" style="margin-bottom:16px">
+  <!-- Set opening balance -->
+  <div class="product-card" style="margin-bottom:12px">
     <div style="padding:14px 18px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Pocket → Savings</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Set Daily Budget Opening Balance</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input type="number" id="w-move-amt" class="ledger-add-input" placeholder="₱ Amount to save" min="0" step="1" style="max-width:180px">
-        <input type="text" id="w-move-note" class="ledger-add-input" placeholder="Note (optional)">
-        <button class="btn btn-primary" style="padding:7px 16px;white-space:nowrap" onclick="walletMoveToSavings()">💾 Save it</button>
+        <input type="number" id="w-opening" class="ledger-add-input" placeholder="₱ Opening amount" min="0" step="1" style="max-width:200px">
+        <button class="btn btn-primary" style="padding:7px 16px" onclick="walletSetOpening()">Set Balance</button>
       </div>
     </div>
   </div>
 
-  <!-- Savings history -->
-  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;padding-left:2px">Savings History</div>
-  <div id="w-savings-list"></div>
+  <!-- Move Daily Budget → Pocket Savings -->
+  <div class="product-card" style="margin-bottom:12px">
+    <div style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Budget → Pocket Savings</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="number" id="w-to-pocket-amt" class="ledger-add-input" placeholder="₱ Amount" min="0" step="1" style="max-width:160px">
+        <input type="text" id="w-to-pocket-note" class="ledger-add-input" placeholder="Note (optional)">
+        <button class="btn btn-primary" style="padding:7px 16px;white-space:nowrap" onclick="walletToPocket()">👝 Move</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move Daily Budget → Savings -->
+  <div class="product-card" style="margin-bottom:16px">
+    <div style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Budget → Savings</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="number" id="w-to-savings-amt" class="ledger-add-input" placeholder="₱ Amount" min="0" step="1" style="max-width:160px">
+        <input type="text" id="w-to-savings-note" class="ledger-add-input" placeholder="Note (optional)">
+        <button class="btn btn-primary" style="padding:7px 16px;white-space:nowrap;background:var(--green)" onclick="walletToSavings()">🏦 Move</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transfer history -->
+  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;padding-left:2px">Transfer History</div>
+  <div id="w-transfer-list"></div>
 </div>
 
 <div class="footer-note">Tap any part row to adjust · Tap piece to mark sold/utang · ☁️ Syncs across devices</div>
@@ -1865,10 +1893,16 @@ let walletSaveTimer = null;
 function loadWallet() {
   try {
     const raw = JSON.parse(localStorage.getItem(WALLET_KEY));
-    if (!raw) return { savings: [] };
-    return raw.savings !== undefined ? raw : { savings: raw };
-  } catch(e) { return { savings: [] }; }
+    if (!raw) return { dailyBudgetOpening: 0, pocketSavings: [], savings: [], transfers: [] };
+    return {
+      dailyBudgetOpening: Number(raw.dailyBudgetOpening) || 0,
+      pocketSavings: Array.isArray(raw.pocketSavings) ? raw.pocketSavings : [],
+      savings: Array.isArray(raw.savings) ? raw.savings : [],
+      transfers: Array.isArray(raw.transfers) ? raw.transfers : [],
+    };
+  } catch(e) { return { dailyBudgetOpening: 0, pocketSavings: [], savings: [], transfers: [] }; }
 }
+
 function saveWallet(data) {
   const payload = { _ts: Date.now(), ...data };
   localStorage.setItem(WALLET_KEY, JSON.stringify(payload));
@@ -1877,6 +1911,7 @@ function saveWallet(data) {
     fetch(FB_WALLET, { method: 'PUT', body: JSON.stringify(payload) }).catch(() => {});
   }, 800);
 }
+
 async function walletCloudLoad() {
   try {
     const res = await fetch(FB_WALLET);
@@ -1891,85 +1926,115 @@ async function walletCloudLoad() {
   } catch(e) {}
 }
 
-function walletMoveToSavings() {
-  const amt  = parseFloat(document.getElementById('w-move-amt').value) || 0;
-  const note = document.getElementById('w-move-note').value.trim();
-  if (amt <= 0) return;
-  // Check pocket has enough
-  const dailyData = loadDailyData();
-  const pocket = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in' ? e.amt : -e.amt), 0), 0);
-  if (amt > pocket) { alert(`Not enough in Pocket (${fmt(pocket)} available)`); return; }
-  // Record as daily out so pocket decreases
-  const today = new Date().toISOString().slice(0,10);
-  let day = dailyData.find(d => d.date === today);
-  if (!day) { day = { date: today, entries: [] }; dailyData.unshift(day); }
-  day.entries.push({ type: 'out', desc: `Saved${note ? ': '+note : ''}`, amt });
-  saveDaily(dailyData);
-  // Add to savings
-  const wallet = loadWallet();
-  if (!Array.isArray(wallet.savings)) wallet.savings = [];
-  wallet.savings.unshift({ date: today, amt, note: note || 'Saved' });
-  saveWallet(wallet);
-  document.getElementById('w-move-amt').value = '';
-  document.getElementById('w-move-note').value = '';
+function walletSetOpening() {
+  const amt = parseFloat(document.getElementById('w-opening').value);
+  if (isNaN(amt) || amt < 0) return;
+  const w = loadWallet();
+  w.dailyBudgetOpening = amt;
+  saveWallet(w);
+  document.getElementById('w-opening').value = '';
   renderWallet();
-  renderDaily();
 }
 
-function walletDelSaving(idx) {
-  const wallet = loadWallet();
-  const entry = wallet.savings[idx];
-  if (!entry) return;
-  if (!confirm(`Remove saving of ${fmt(entry.amt)}? This will add it back to Pocket.`)) return;
-  wallet.savings.splice(idx, 1);
-  saveWallet(wallet);
-  // Add back to pocket via daily in
+function _walletBudgetRemaining(w) {
+  const dailyOutTotal = loadDailyData().reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
+  const transferred   = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
+  return w.dailyBudgetOpening - dailyOutTotal - transferred;
+}
+
+function walletToPocket() {
+  const amt  = parseFloat(document.getElementById('w-to-pocket-amt').value) || 0;
+  const note = document.getElementById('w-to-pocket-note').value.trim();
+  if (amt <= 0) return;
+  const w = loadWallet();
+  const budget = _walletBudgetRemaining(w);
+  if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
-  const dailyData = loadDailyData();
-  let day = dailyData.find(d => d.date === today);
-  if (!day) { day = { date: today, entries: [] }; dailyData.unshift(day); }
-  day.entries.push({ type: 'in', desc: `Saving returned: ${entry.note||''}`, amt: entry.amt });
-  saveDaily(dailyData);
+  w.transfers.unshift({ date: today, amt, to: 'pocket', note: note || 'To Pocket Savings' });
+  w.pocketSavings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
+  saveWallet(w);
+  document.getElementById('w-to-pocket-amt').value = '';
+  document.getElementById('w-to-pocket-note').value = '';
   renderWallet();
-  renderDaily();
+}
+
+function walletToSavings() {
+  const amt  = parseFloat(document.getElementById('w-to-savings-amt').value) || 0;
+  const note = document.getElementById('w-to-savings-note').value.trim();
+  if (amt <= 0) return;
+  const w = loadWallet();
+  const budget = _walletBudgetRemaining(w);
+  if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
+  const today = new Date().toISOString().slice(0,10);
+  w.transfers.unshift({ date: today, amt, to: 'savings', note: note || 'To Savings' });
+  w.savings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
+  saveWallet(w);
+  document.getElementById('w-to-savings-amt').value = '';
+  document.getElementById('w-to-savings-note').value = '';
+  renderWallet();
+}
+
+function walletDelTransfer(idx) {
+  const w = loadWallet();
+  const t = w.transfers[idx];
+  if (!t) return;
+  const toLabel = t.to === 'pocket' ? 'Pocket Savings' : 'Savings';
+  if (!confirm(`Remove transfer of ${fmt(t.amt)} to ${toLabel}? This will return it to Daily Budget.`)) return;
+  const pot = t.to === 'pocket' ? w.pocketSavings : w.savings;
+  const pi = pot.findIndex(e => e.date === t.date && e.amt === t.amt);
+  if (pi >= 0) pot.splice(pi, 1);
+  w.transfers.splice(idx, 1);
+  saveWallet(w);
+  renderWallet();
 }
 
 function renderWallet() {
-  const wallet    = loadWallet();
-  const dailyData = loadDailyData();
-  const savings   = Array.isArray(wallet.savings) ? wallet.savings : [];
+  const w = loadWallet();
+  const dailyData    = loadDailyData();
+  const dailyOutTotal = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
+  const transferred  = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
+  const budget       = w.dailyBudgetOpening - dailyOutTotal - transferred;
+  const pocketTotal  = w.pocketSavings.reduce((a,e) => a + (Number(e.amt)||0), 0);
+  const savingsTotal = w.savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
 
-  // Pocket = total daily balance
-  const pocket = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in' ? e.amt : -e.amt), 0), 0);
-  const totalSaved = savings.reduce((a,s) => a + (Number(s.amt)||0), 0);
+  const openingEl = document.getElementById('w-opening');
+  if (openingEl) openingEl.placeholder = `Current opening: ${fmt(w.dailyBudgetOpening)}`;
+
+  const budgetEl = document.getElementById('w-daily-budget');
+  if (budgetEl) { budgetEl.textContent = fmt(budget); budgetEl.style.color = budget >= 0 ? 'var(--accent2)' : 'var(--red)'; }
+  const budgetSub = document.getElementById('w-daily-budget-sub');
+  if (budgetSub) budgetSub.textContent = `Opening ${fmt(w.dailyBudgetOpening)} · Spent ${fmt(dailyOutTotal)}`;
 
   const pocketEl = document.getElementById('w-pocket');
-  if (pocketEl) { pocketEl.textContent = fmt(pocket); pocketEl.style.color = pocket >= 0 ? 'var(--accent)' : 'var(--red)'; }
+  if (pocketEl) pocketEl.textContent = fmt(pocketTotal);
   const pocketSub = document.getElementById('w-pocket-sub');
-  if (pocketSub) pocketSub.textContent = 'From your Daily balance';
-  const savingsEl = document.getElementById('w-savings');
-  if (savingsEl) savingsEl.textContent = fmt(totalSaved);
-  const savingsSub = document.getElementById('w-savings-sub');
-  if (savingsSub) savingsSub.textContent = `${savings.length} transfer${savings.length !== 1 ? 's' : ''}`;
+  if (pocketSub) pocketSub.textContent = `${w.pocketSavings.length} transfer${w.pocketSavings.length !== 1 ? 's' : ''}`;
 
-  const list = document.getElementById('w-savings-list');
+  const savingsEl = document.getElementById('w-savings');
+  if (savingsEl) savingsEl.textContent = fmt(savingsTotal);
+  const savingsSub = document.getElementById('w-savings-sub');
+  if (savingsSub) savingsSub.textContent = `${w.savings.length} transfer${w.savings.length !== 1 ? 's' : ''}`;
+
+  const list = document.getElementById('w-transfer-list');
   if (!list) return;
-  if (!savings.length) {
-    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No savings yet. Move money from Pocket above.</div>';
+  if (!w.transfers.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No transfers yet.</div>';
     return;
   }
-  list.innerHTML = savings.map((s, i) => {
-    const label = new Date(s.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric' });
+  list.innerHTML = w.transfers.map((t, i) => {
+    const label   = new Date(t.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric' });
+    const icon    = t.to === 'pocket' ? '👝' : '🏦';
+    const toLabel = t.to === 'pocket' ? 'Pocket Savings' : 'Savings';
     return `
     <div class="daily-day-card" style="margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px;padding:12px 16px">
-        <span style="font-size:20px">🏦</span>
+        <span style="font-size:20px">${icon}</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:600">${s.note || 'Saved'}</div>
-          <div style="font-size:11px;color:var(--muted)">${label}</div>
+          <div style="font-size:13px;font-weight:600">${t.note || toLabel}</div>
+          <div style="font-size:11px;color:var(--muted)">${label} · → ${toLabel}</div>
         </div>
-        <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--green)">${fmt(s.amt)}</div>
-        <button class="daily-entry-del" onclick="walletDelSaving(${i})">×</button>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--green)">${fmt(t.amt)}</div>
+        <button class="daily-entry-del" onclick="walletDelTransfer(${i})">×</button>
       </div>
     </div>`;
   }).join('');
