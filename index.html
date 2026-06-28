@@ -701,6 +701,7 @@
 <div class="tab-bar">
   <button class="tab-btn active" id="tab-chick" onclick="switchTab('chick')">🐔 ChickTrack</button>
   <button class="tab-btn" id="tab-daily" onclick="switchTab('daily')">📅 Daily</button>
+  <button class="tab-btn" id="tab-wallet" onclick="switchTab('wallet')">💰 Wallet</button>
 </div>
 
 <!-- CHICKTRACK TAB -->
@@ -798,6 +799,40 @@
   </div>
 
   <div id="daily-list"></div>
+</div>
+
+<!-- WALLET TAB -->
+<div id="view-wallet" style="display:none;max-width:960px;margin:0 auto;padding-bottom:60px">
+
+  <!-- Pocket + Savings cards -->
+  <div class="daily-summary-grid" style="margin-bottom:16px">
+    <div class="card" style="border-top:2px solid var(--accent);grid-column:span 1">
+      <div class="card-label">👝 Pocket Money</div>
+      <div class="card-value" id="w-pocket" style="color:var(--accent)">₱0.00</div>
+      <div class="card-sub" id="w-pocket-sub"></div>
+    </div>
+    <div class="card" style="border-top:2px solid var(--green);grid-column:span 2">
+      <div class="card-label">🏦 Savings</div>
+      <div class="card-value" id="w-savings" style="color:var(--green)">₱0.00</div>
+      <div class="card-sub" id="w-savings-sub"></div>
+    </div>
+  </div>
+
+  <!-- Move to Savings -->
+  <div class="product-card" style="margin-bottom:16px">
+    <div style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Pocket → Savings</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="number" id="w-move-amt" class="ledger-add-input" placeholder="₱ Amount to save" min="0" step="1" style="max-width:180px">
+        <input type="text" id="w-move-note" class="ledger-add-input" placeholder="Note (optional)">
+        <button class="btn btn-primary" style="padding:7px 16px;white-space:nowrap" onclick="walletMoveToSavings()">💾 Save it</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Savings history -->
+  <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.07em;margin-bottom:8px;padding-left:2px">Savings History</div>
+  <div id="w-savings-list"></div>
 </div>
 
 <div class="footer-note">Tap any part row to adjust · Tap piece to mark sold/utang · ☁️ Syncs across devices</div>
@@ -1701,11 +1736,12 @@ function resetData() {
 
 // ── TABS ──────────────────────────────────────────────
 function switchTab(tab) {
-  document.getElementById('view-chick').style.display = tab === 'chick' ? '' : 'none';
-  document.getElementById('view-daily').style.display = tab === 'daily' ? '' : 'none';
-  document.getElementById('tab-chick').classList.toggle('active', tab === 'chick');
-  document.getElementById('tab-daily').classList.toggle('active', tab === 'daily');
-  if (tab === 'daily') { renderDaily(); dailyCloudLoad(); }
+  ['chick','daily','wallet'].forEach(t => {
+    document.getElementById('view-'+t).style.display = t === tab ? '' : 'none';
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'daily')  { renderDaily();  dailyCloudLoad(); }
+  if (tab === 'wallet') { renderWallet(); dailyCloudLoad(); walletCloudLoad(); }
 }
 
 // ── DAILY TRACKER ─────────────────────────────────────
@@ -1821,6 +1857,124 @@ function renderDaily() {
   }).join('');
 }
 
+// ── WALLET ────────────────────────────────────────────
+const WALLET_KEY = 'chicktrack-wallet';
+const FB_WALLET  = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/wallet.json';
+let walletSaveTimer = null;
+
+function loadWallet() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(WALLET_KEY));
+    if (!raw) return { savings: [] };
+    return raw.savings !== undefined ? raw : { savings: raw };
+  } catch(e) { return { savings: [] }; }
+}
+function saveWallet(data) {
+  const payload = { _ts: Date.now(), ...data };
+  localStorage.setItem(WALLET_KEY, JSON.stringify(payload));
+  clearTimeout(walletSaveTimer);
+  walletSaveTimer = setTimeout(() => {
+    fetch(FB_WALLET, { method: 'PUT', body: JSON.stringify(payload) }).catch(() => {});
+  }, 800);
+}
+async function walletCloudLoad() {
+  try {
+    const res = await fetch(FB_WALLET);
+    if (!res.ok) return;
+    const cloud = await res.json();
+    if (!cloud) return;
+    const localRaw = JSON.parse(localStorage.getItem(WALLET_KEY) || 'null');
+    if ((cloud._ts || 0) > (localRaw?._ts || 0)) {
+      localStorage.setItem(WALLET_KEY, JSON.stringify(cloud));
+      renderWallet();
+    }
+  } catch(e) {}
+}
+
+function walletMoveToSavings() {
+  const amt  = parseFloat(document.getElementById('w-move-amt').value) || 0;
+  const note = document.getElementById('w-move-note').value.trim();
+  if (amt <= 0) return;
+  // Check pocket has enough
+  const dailyData = loadDailyData();
+  const pocket = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in' ? e.amt : -e.amt), 0), 0);
+  if (amt > pocket) { alert(`Not enough in Pocket (${fmt(pocket)} available)`); return; }
+  // Record as daily out so pocket decreases
+  const today = new Date().toISOString().slice(0,10);
+  let day = dailyData.find(d => d.date === today);
+  if (!day) { day = { date: today, entries: [] }; dailyData.unshift(day); }
+  day.entries.push({ type: 'out', desc: `Saved${note ? ': '+note : ''}`, amt });
+  saveDaily(dailyData);
+  // Add to savings
+  const wallet = loadWallet();
+  if (!Array.isArray(wallet.savings)) wallet.savings = [];
+  wallet.savings.unshift({ date: today, amt, note: note || 'Saved' });
+  saveWallet(wallet);
+  document.getElementById('w-move-amt').value = '';
+  document.getElementById('w-move-note').value = '';
+  renderWallet();
+  renderDaily();
+}
+
+function walletDelSaving(idx) {
+  const wallet = loadWallet();
+  const entry = wallet.savings[idx];
+  if (!entry) return;
+  if (!confirm(`Remove saving of ${fmt(entry.amt)}? This will add it back to Pocket.`)) return;
+  wallet.savings.splice(idx, 1);
+  saveWallet(wallet);
+  // Add back to pocket via daily in
+  const today = new Date().toISOString().slice(0,10);
+  const dailyData = loadDailyData();
+  let day = dailyData.find(d => d.date === today);
+  if (!day) { day = { date: today, entries: [] }; dailyData.unshift(day); }
+  day.entries.push({ type: 'in', desc: `Saving returned: ${entry.note||''}`, amt: entry.amt });
+  saveDaily(dailyData);
+  renderWallet();
+  renderDaily();
+}
+
+function renderWallet() {
+  const wallet    = loadWallet();
+  const dailyData = loadDailyData();
+  const savings   = Array.isArray(wallet.savings) ? wallet.savings : [];
+
+  // Pocket = total daily balance
+  const pocket = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in' ? e.amt : -e.amt), 0), 0);
+  const totalSaved = savings.reduce((a,s) => a + (Number(s.amt)||0), 0);
+
+  const pocketEl = document.getElementById('w-pocket');
+  if (pocketEl) { pocketEl.textContent = fmt(pocket); pocketEl.style.color = pocket >= 0 ? 'var(--accent)' : 'var(--red)'; }
+  const pocketSub = document.getElementById('w-pocket-sub');
+  if (pocketSub) pocketSub.textContent = 'From your Daily balance';
+  const savingsEl = document.getElementById('w-savings');
+  if (savingsEl) savingsEl.textContent = fmt(totalSaved);
+  const savingsSub = document.getElementById('w-savings-sub');
+  if (savingsSub) savingsSub.textContent = `${savings.length} transfer${savings.length !== 1 ? 's' : ''}`;
+
+  const list = document.getElementById('w-savings-list');
+  if (!list) return;
+  if (!savings.length) {
+    list.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted);font-size:13px">No savings yet. Move money from Pocket above.</div>';
+    return;
+  }
+  list.innerHTML = savings.map((s, i) => {
+    const label = new Date(s.date + 'T00:00:00').toLocaleDateString('en-PH', { weekday:'short', month:'short', day:'numeric' });
+    return `
+    <div class="daily-day-card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 16px">
+        <span style="font-size:20px">🏦</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600">${s.note || 'Saved'}</div>
+          <div style="font-size:11px;color:var(--muted)">${label}</div>
+        </div>
+        <div style="font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;color:var(--green)">${fmt(s.amt)}</div>
+        <button class="daily-entry-del" onclick="walletDelSaving(${i})">×</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 // ── DATE ──────────────────────────────────────────────
 document.getElementById('dateTag').textContent = new Date().toLocaleDateString('en-PH', {
   weekday:'short', year:'numeric', month:'short', day:'numeric'
@@ -1830,6 +1984,7 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 document.getElementById('d-date').value = new Date().toISOString().slice(0,10);
 render();
 dailyCloudLoad();
+walletCloudLoad();
 cloudLoad().then(cloudData => {
   if (cloudData) {
     const localTs = state._ts || 0;
