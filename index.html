@@ -1705,17 +1705,48 @@ function switchTab(tab) {
   document.getElementById('view-daily').style.display = tab === 'daily' ? '' : 'none';
   document.getElementById('tab-chick').classList.toggle('active', tab === 'chick');
   document.getElementById('tab-daily').classList.toggle('active', tab === 'daily');
-  if (tab === 'daily') renderDaily();
+  if (tab === 'daily') { renderDaily(); dailyCloudLoad(); }
 }
 
 // ── DAILY TRACKER ─────────────────────────────────────
 const DAILY_KEY = 'chicktrack-daily';
+const FB_DAILY  = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/daily.json';
+let dailySaveTimer = null;
 
 function loadDaily() {
   try { return JSON.parse(localStorage.getItem(DAILY_KEY)) || []; } catch(e) { return []; }
 }
 function saveDaily(data) {
-  localStorage.setItem(DAILY_KEY, JSON.stringify(data));
+  // Timestamp for conflict resolution
+  const payload = { _ts: Date.now(), entries: data };
+  localStorage.setItem(DAILY_KEY, JSON.stringify(payload));
+  clearTimeout(dailySaveTimer);
+  dailySaveTimer = setTimeout(() => {
+    fetch(FB_DAILY, { method: 'PUT', body: JSON.stringify(payload) }).catch(() => {});
+  }, 800);
+}
+function loadDailyData() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DAILY_KEY));
+    if (!raw) return [];
+    return Array.isArray(raw) ? raw : (raw.entries || []);
+  } catch(e) { return []; }
+}
+
+async function dailyCloudLoad() {
+  try {
+    const res = await fetch(FB_DAILY);
+    if (!res.ok) return;
+    const cloud = await res.json();
+    if (!cloud) return;
+    const localRaw = JSON.parse(localStorage.getItem(DAILY_KEY) || 'null');
+    const localTs  = localRaw?._ts || 0;
+    const cloudTs  = cloud._ts || 0;
+    if (cloudTs > localTs) {
+      localStorage.setItem(DAILY_KEY, JSON.stringify(cloud));
+      renderDaily();
+    }
+  } catch(e) {}
 }
 
 function dailyAdd(type) {
@@ -1723,7 +1754,7 @@ function dailyAdd(type) {
   const desc = document.getElementById('d-desc').value.trim();
   const amt  = parseFloat(document.getElementById('d-amt').value) || 0;
   if (!date || !desc || amt <= 0) return;
-  const data = loadDaily();
+  const data = loadDailyData();
   let day = data.find(d => d.date === date);
   if (!day) { day = { date, entries: [] }; data.push(day); data.sort((a,b) => b.date.localeCompare(a.date)); }
   day.entries.push({ type, desc, amt });
@@ -1734,7 +1765,7 @@ function dailyAdd(type) {
 }
 
 function dailyDel(date, idx) {
-  const data = loadDaily();
+  const data = loadDailyData();
   const day = data.find(d => d.date === date);
   if (!day) return;
   day.entries.splice(idx, 1);
@@ -1744,7 +1775,7 @@ function dailyDel(date, idx) {
 }
 
 function renderDaily() {
-  const data = loadDaily();
+  const data = loadDailyData();
   let totalIn = 0, totalOut = 0;
   data.forEach(d => d.entries.forEach(e => {
     if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
@@ -1798,6 +1829,7 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 // ── INIT ──────────────────────────────────────────────
 document.getElementById('d-date').value = new Date().toISOString().slice(0,10);
 render();
+dailyCloudLoad();
 cloudLoad().then(cloudData => {
   if (cloudData) {
     const localTs = state._ts || 0;
