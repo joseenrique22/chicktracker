@@ -1826,6 +1826,7 @@ function dailyAdd(type) {
   document.getElementById('d-desc').value = '';
   document.getElementById('d-amt').value = '';
   renderDaily();
+  renderWallet();
 }
 
 function dailyDel(date, idx) {
@@ -1836,6 +1837,7 @@ function dailyDel(date, idx) {
   if (!day.entries.length) data.splice(data.indexOf(day), 1);
   saveDaily(data);
   renderDaily();
+  renderWallet();
 }
 
 function renderDaily() {
