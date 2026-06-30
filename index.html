@@ -1484,7 +1484,7 @@ function ledgerAdd() {
   if (!name || !desc || amt <= 0) return;
   if (!state.ledger) state.ledger = [];
   state.ledger.push({ id: _ledgerIdSeq++, name, items:[{desc, amt}], payments:[], fullyPaid:false });
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerAddItem(id) {
   const desc = document.getElementById('litem-desc-'+id).value.trim();
@@ -1494,18 +1494,18 @@ function ledgerAddItem(id) {
   if (!e) return;
   if (!Array.isArray(e.items)) e.items = [];
   e.items.push({ desc, amt });
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerDel(id) {
   if (!confirm('Remove this record?')) return;
   state.ledger = state.ledger.filter(e => e.id !== id);
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerDelItem(id, ii) {
   const e = state.ledger.find(e => e.id === id);
   if (!e) return;
   e.items.splice(ii, 1);
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerAddPay(id) {
   const e = state.ledger.find(e => e.id === id);
@@ -1517,13 +1517,13 @@ function ledgerAddPay(id) {
   const total = e.items.reduce((s, it) => s + it.amt, 0);
   const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
   if (paid >= total) e.fullyPaid = true;
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerDelPay(id, pi) {
   const e = state.ledger.find(e => e.id === id);
   if (!e) return;
   e.payments.splice(pi, 1);
-  saveState(); renderLedger();
+  saveState(); render();
 }
 function ledgerMarkPaid(id) {
   const e = state.ledger.find(e => e.id === id);
