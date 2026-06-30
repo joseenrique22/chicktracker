@@ -1856,8 +1856,7 @@ function renderDaily() {
     if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
   }));
   const opening = loadDailyOpening();
-  const savingsTotal = loadWallet().savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
-  const balance = opening - savingsTotal + totalIn - totalOut;
+  const balance = opening + totalIn - totalOut;
   document.getElementById('d-totalIn').textContent  = fmt(totalIn);
   document.getElementById('d-totalOut').textContent = fmt(totalOut);
   const balEl = document.getElementById('d-balance');
@@ -1948,9 +1947,7 @@ function _dailyBalance() {
   const data = loadDailyData();
   const totalIn  = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
   const totalOut = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  const w = loadWallet();
-  const savingsTotal = w.savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
-  return loadDailyOpening() - savingsTotal + totalIn - totalOut;
+  return loadDailyOpening() + totalIn - totalOut;
 }
 
 function _addDailyOut(date, desc, amt) {
