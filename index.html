@@ -1856,7 +1856,8 @@ function renderDaily() {
     if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
   }));
   const opening = loadDailyOpening();
-  const balance = opening + totalIn - totalOut;
+  const savingsTotal = loadWallet().savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
+  const balance = opening - savingsTotal + totalIn - totalOut;
   document.getElementById('d-totalIn').textContent  = fmt(totalIn);
   document.getElementById('d-totalOut').textContent = fmt(totalOut);
   const balEl = document.getElementById('d-balance');
@@ -1947,7 +1948,9 @@ function _dailyBalance() {
   const data = loadDailyData();
   const totalIn  = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
   const totalOut = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  return loadDailyOpening() + totalIn - totalOut;
+  const w = loadWallet();
+  const savingsTotal = w.savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
+  return loadDailyOpening() - savingsTotal + totalIn - totalOut;
 }
 
 function _addDailyOut(date, desc, amt) {
@@ -2002,9 +2005,10 @@ function walletToSavings() {
   w.transfers.unshift({ date: today, amt, to: 'savings', note: label });
   w.savings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
   saveWallet(w);
-  _addDailyOut(today, `Transfer: ${label}`, amt);
+  // Savings is locked — doesn't log as Daily Out, just reduces from opening
   document.getElementById('w-to-savings-amt').value = '';
   document.getElementById('w-to-savings-note').value = '';
+  renderDaily();
   renderWallet();
 }
 
@@ -2019,7 +2023,8 @@ function walletDelTransfer(idx) {
   if (pi >= 0) pot.splice(pi, 1);
   w.transfers.splice(idx, 1);
   saveWallet(w);
-  _removeDailyOut(t.date, t.amt);
+  if (t.to === 'pocket') _removeDailyOut(t.date, t.amt);
+  renderDaily();
   renderWallet();
 }
 
