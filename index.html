@@ -779,6 +779,18 @@
     <div class="card" style="border-top:2px solid #a855f7">
       <div class="card-label">Cash on Hand</div>
       <div class="card-value" id="d-balance" style="color:#a855f7">₱0.00</div>
+      <div class="card-sub" id="d-balance-sub"></div>
+    </div>
+  </div>
+
+  <!-- Set Daily Opening Balance -->
+  <div class="product-card" style="margin-bottom:12px">
+    <div style="padding:14px 18px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Set Daily Opening Balance</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <input type="number" id="d-opening" class="ledger-add-input" placeholder="₱ e.g. 4450" min="0" step="1" style="max-width:180px">
+        <button class="btn btn-primary" style="padding:7px 16px" onclick="dailySetOpening()">Set</button>
+      </div>
     </div>
   </div>
 
@@ -804,13 +816,8 @@
 <!-- WALLET TAB -->
 <div id="view-wallet" style="display:none;max-width:960px;margin:0 auto;padding-bottom:60px">
 
-  <!-- 3 pot cards -->
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
-    <div class="card" style="border-top:2px solid var(--accent2)">
-      <div class="card-label">📅 Daily Budget</div>
-      <div class="card-value" id="w-daily-budget" style="color:var(--accent2)">₱0.00</div>
-      <div class="card-sub" id="w-daily-budget-sub"></div>
-    </div>
+  <!-- 2 pot cards -->
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:16px">
     <div class="card" style="border-top:2px solid var(--accent)">
       <div class="card-label">👝 Pocket Savings</div>
       <div class="card-value" id="w-pocket" style="color:var(--accent)">₱0.00</div>
@@ -823,21 +830,10 @@
     </div>
   </div>
 
-  <!-- Set opening balance -->
+  <!-- Move Daily → Pocket Savings -->
   <div class="product-card" style="margin-bottom:12px">
     <div style="padding:14px 18px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Set Daily Budget Opening Balance</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <input type="number" id="w-opening" class="ledger-add-input" placeholder="₱ Opening amount" min="0" step="1" style="max-width:200px">
-        <button class="btn btn-primary" style="padding:7px 16px" onclick="walletSetOpening()">Set Balance</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Move Daily Budget → Pocket Savings -->
-  <div class="product-card" style="margin-bottom:12px">
-    <div style="padding:14px 18px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Budget → Pocket Savings</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Balance → Pocket Savings</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input type="number" id="w-to-pocket-amt" class="ledger-add-input" placeholder="₱ Amount" min="0" step="1" style="max-width:160px">
         <input type="text" id="w-to-pocket-note" class="ledger-add-input" placeholder="Note (optional)">
@@ -846,10 +842,10 @@
     </div>
   </div>
 
-  <!-- Move Daily Budget → Savings -->
+  <!-- Move Daily → Savings -->
   <div class="product-card" style="margin-bottom:16px">
     <div style="padding:14px 18px">
-      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Budget → Savings</div>
+      <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Move Daily Balance → Savings</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <input type="number" id="w-to-savings-amt" class="ledger-add-input" placeholder="₱ Amount" min="0" step="1" style="max-width:160px">
         <input type="text" id="w-to-savings-note" class="ledger-add-input" placeholder="Note (optional)">
@@ -1773,9 +1769,22 @@ function switchTab(tab) {
 }
 
 // ── DAILY TRACKER ─────────────────────────────────────
-const DAILY_KEY = 'chicktrack-daily';
+const DAILY_KEY         = 'chicktrack-daily';
+const DAILY_OPENING_KEY = 'chicktrack-daily-opening';
 const FB_DAILY  = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/daily.json';
 let dailySaveTimer = null;
+
+function loadDailyOpening() {
+  return parseFloat(localStorage.getItem(DAILY_OPENING_KEY)) || 0;
+}
+function dailySetOpening() {
+  const amt = parseFloat(document.getElementById('d-opening').value);
+  if (isNaN(amt) || amt < 0) return;
+  localStorage.setItem(DAILY_OPENING_KEY, String(amt));
+  document.getElementById('d-opening').value = '';
+  renderDaily();
+  renderWallet();
+}
 
 function loadDaily() {
   try { return JSON.parse(localStorage.getItem(DAILY_KEY)) || []; } catch(e) { return []; }
@@ -1846,13 +1855,18 @@ function renderDaily() {
   data.forEach(d => d.entries.forEach(e => {
     if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
   }));
-  const opening = loadWallet().dailyBudgetOpening || 0;
+  const opening = loadDailyOpening();
   const balance = opening + totalIn - totalOut;
   document.getElementById('d-totalIn').textContent  = fmt(totalIn);
   document.getElementById('d-totalOut').textContent = fmt(totalOut);
   const balEl = document.getElementById('d-balance');
   balEl.textContent = fmt(balance);
   balEl.style.color = balance >= 0 ? '#a855f7' : 'var(--red)';
+  const balSub = document.getElementById('d-balance-sub');
+  if (balSub) balSub.textContent = opening > 0 ? `Opening ${fmt(opening)}` : 'Set opening balance above';
+
+  const openingInput = document.getElementById('d-opening');
+  if (openingInput) openingInput.placeholder = `Current: ${fmt(opening)}`;
 
   const list = document.getElementById('daily-list');
   if (!data.length) {
@@ -1929,23 +1943,11 @@ async function walletCloudLoad() {
   } catch(e) {}
 }
 
-function walletSetOpening() {
-  const amt = parseFloat(document.getElementById('w-opening').value);
-  if (isNaN(amt) || amt < 0) return;
-  const w = loadWallet();
-  w.dailyBudgetOpening = amt;
-  saveWallet(w);
-  document.getElementById('w-opening').value = '';
-  renderWallet();
-}
-
-function _walletBudgetStats(w) {
-  const dailyData = loadDailyData();
-  const dailyIn   = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
-  const dailyOut  = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  // transfers are already recorded as Daily Out entries, so no separate subtraction needed
-  const remaining = w.dailyBudgetOpening + dailyIn - dailyOut;
-  return { dailyIn, dailyOut, remaining };
+function _dailyBalance() {
+  const data = loadDailyData();
+  const totalIn  = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
+  const totalOut = data.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
+  return loadDailyOpening() + totalIn - totalOut;
 }
 
 function _addDailyOut(date, desc, amt) {
@@ -1975,8 +1977,8 @@ function walletToPocket() {
   const note = document.getElementById('w-to-pocket-note').value.trim();
   if (amt <= 0) return;
   const w = loadWallet();
-  const { remaining: budget } = _walletBudgetStats(w);
-  if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
+  const budget = _dailyBalance();
+  if (amt > budget) { alert(`Not enough in Daily Balance (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
   const label = note || 'To Pocket Savings';
   w.transfers.unshift({ date: today, amt, to: 'pocket', note: label });
@@ -1993,8 +1995,8 @@ function walletToSavings() {
   const note = document.getElementById('w-to-savings-note').value.trim();
   if (amt <= 0) return;
   const w = loadWallet();
-  const { remaining: budget } = _walletBudgetStats(w);
-  if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
+  const budget = _dailyBalance();
+  if (amt > budget) { alert(`Not enough in Daily Balance (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
   const label = note || 'To Savings';
   w.transfers.unshift({ date: today, amt, to: 'savings', note: label });
@@ -2011,7 +2013,7 @@ function walletDelTransfer(idx) {
   const t = w.transfers[idx];
   if (!t) return;
   const toLabel = t.to === 'pocket' ? 'Pocket Savings' : 'Savings';
-  if (!confirm(`Remove transfer of ${fmt(t.amt)} to ${toLabel}? This will return it to Daily Budget.`)) return;
+  if (!confirm(`Remove transfer of ${fmt(t.amt)} to ${toLabel}? This will return it to your Daily balance.`)) return;
   const pot = t.to === 'pocket' ? w.pocketSavings : w.savings;
   const pi = pot.findIndex(e => e.date === t.date && e.amt === t.amt);
   if (pi >= 0) pot.splice(pi, 1);
@@ -2023,17 +2025,8 @@ function walletDelTransfer(idx) {
 
 function renderWallet() {
   const w = loadWallet();
-  const { dailyIn, dailyOut, remaining: budget } = _walletBudgetStats(w);
   const pocketTotal  = w.pocketSavings.reduce((a,e) => a + (Number(e.amt)||0), 0);
   const savingsTotal = w.savings.reduce((a,e) => a + (Number(e.amt)||0), 0);
-
-  const openingEl = document.getElementById('w-opening');
-  if (openingEl) openingEl.placeholder = `Current opening: ${fmt(w.dailyBudgetOpening)}`;
-
-  const budgetEl = document.getElementById('w-daily-budget');
-  if (budgetEl) { budgetEl.textContent = fmt(budget); budgetEl.style.color = budget >= 0 ? 'var(--accent2)' : 'var(--red)'; }
-  const budgetSub = document.getElementById('w-daily-budget-sub');
-  if (budgetSub) budgetSub.textContent = `Opening ${fmt(w.dailyBudgetOpening)} · +${fmt(dailyIn)} In · −${fmt(dailyOut)} Out`;
 
   const pocketEl = document.getElementById('w-pocket');
   if (pocketEl) pocketEl.textContent = fmt(pocketTotal);
