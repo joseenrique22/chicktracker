@@ -1984,7 +1984,6 @@ function walletToPocket() {
   w.transfers.unshift({ date: today, amt, to: 'pocket', note: label });
   w.pocketSavings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
   saveWallet(w);
-  _addDailyOut(today, `Transfer: ${label}`, amt);
   document.getElementById('w-to-pocket-amt').value = '';
   document.getElementById('w-to-pocket-note').value = '';
   renderWallet();
@@ -2020,7 +2019,7 @@ function walletDelTransfer(idx) {
   if (pi >= 0) pot.splice(pi, 1);
   w.transfers.splice(idx, 1);
   saveWallet(w);
-  if (t.to === 'pocket') _removeDailyOut(t.date, t.amt);
+  // neither pot touches Daily entries
   renderDaily();
   renderWallet();
 }
