@@ -777,7 +777,7 @@
       <div class="card-value" id="d-totalOut" style="color:var(--red)">₱0.00</div>
     </div>
     <div class="card" style="border-top:2px solid #a855f7">
-      <div class="card-label">Balance</div>
+      <div class="card-label">Cash on Hand</div>
       <div class="card-value" id="d-balance" style="color:#a855f7">₱0.00</div>
     </div>
   </div>
@@ -1846,7 +1846,8 @@ function renderDaily() {
   data.forEach(d => d.entries.forEach(e => {
     if (e.type === 'in') totalIn += e.amt; else totalOut += e.amt;
   }));
-  const balance = totalIn - totalOut;
+  const opening = loadWallet().dailyBudgetOpening || 0;
+  const balance = opening + totalIn - totalOut;
   document.getElementById('d-totalIn').textContent  = fmt(totalIn);
   document.getElementById('d-totalOut').textContent = fmt(totalOut);
   const balEl = document.getElementById('d-balance');
