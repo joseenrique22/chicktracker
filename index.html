@@ -1939,12 +1939,34 @@ function walletSetOpening() {
 }
 
 function _walletBudgetStats(w) {
-  const dailyData    = loadDailyData();
-  const dailyIn      = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
-  const dailyOut     = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
-  const transferred  = w.transfers.reduce((a,t) => a + (Number(t.amt)||0), 0);
-  const remaining    = w.dailyBudgetOpening + dailyIn - dailyOut - transferred;
-  return { dailyIn, dailyOut, transferred, remaining };
+  const dailyData = loadDailyData();
+  const dailyIn   = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='in'  ? (Number(e.amt)||0) : 0), 0), 0);
+  const dailyOut  = dailyData.reduce((a,d) => a + d.entries.reduce((s,e) => s + (e.type==='out' ? (Number(e.amt)||0) : 0), 0), 0);
+  // transfers are already recorded as Daily Out entries, so no separate subtraction needed
+  const remaining = w.dailyBudgetOpening + dailyIn - dailyOut;
+  return { dailyIn, dailyOut, remaining };
+}
+
+function _addDailyOut(date, desc, amt) {
+  const data = loadDailyData();
+  let day = data.find(d => d.date === date);
+  if (!day) { day = { date, entries: [] }; data.push(day); data.sort((a,b) => b.date.localeCompare(a.date)); }
+  day.entries.push({ type: 'out', desc, amt, _walletTransfer: true });
+  saveDaily(data);
+  renderDaily();
+}
+
+function _removeDailyOut(date, amt) {
+  const data = loadDailyData();
+  const day = data.find(d => d.date === date);
+  if (!day) return;
+  const idx = day.entries.findIndex(e => e._walletTransfer && e.type === 'out' && e.amt === amt);
+  if (idx >= 0) {
+    day.entries.splice(idx, 1);
+    if (!day.entries.length) data.splice(data.indexOf(day), 1);
+    saveDaily(data);
+    renderDaily();
+  }
 }
 
 function walletToPocket() {
@@ -1955,9 +1977,11 @@ function walletToPocket() {
   const { remaining: budget } = _walletBudgetStats(w);
   if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
-  w.transfers.unshift({ date: today, amt, to: 'pocket', note: note || 'To Pocket Savings' });
+  const label = note || 'To Pocket Savings';
+  w.transfers.unshift({ date: today, amt, to: 'pocket', note: label });
   w.pocketSavings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
   saveWallet(w);
+  _addDailyOut(today, `Transfer: ${label}`, amt);
   document.getElementById('w-to-pocket-amt').value = '';
   document.getElementById('w-to-pocket-note').value = '';
   renderWallet();
@@ -1971,9 +1995,11 @@ function walletToSavings() {
   const { remaining: budget } = _walletBudgetStats(w);
   if (amt > budget) { alert(`Not enough in Daily Budget (${fmt(budget)} available)`); return; }
   const today = new Date().toISOString().slice(0,10);
-  w.transfers.unshift({ date: today, amt, to: 'savings', note: note || 'To Savings' });
+  const label = note || 'To Savings';
+  w.transfers.unshift({ date: today, amt, to: 'savings', note: label });
   w.savings.unshift({ date: today, amt, note: note || 'From Daily Budget' });
   saveWallet(w);
+  _addDailyOut(today, `Transfer: ${label}`, amt);
   document.getElementById('w-to-savings-amt').value = '';
   document.getElementById('w-to-savings-note').value = '';
   renderWallet();
@@ -1990,6 +2016,7 @@ function walletDelTransfer(idx) {
   if (pi >= 0) pot.splice(pi, 1);
   w.transfers.splice(idx, 1);
   saveWallet(w);
+  _removeDailyOut(t.date, t.amt);
   renderWallet();
 }
 
