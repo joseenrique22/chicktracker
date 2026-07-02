@@ -1053,7 +1053,8 @@ function normalizeState() {
 
   // Ensure ledger
   if (!Array.isArray(state.ledger)) state.ledger = toArray(state.ledger);
-  if (state.ledger.length === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
+  // Only fill default ledger for sheet 0 (legacy); new sheets start empty
+  if (state.ledger.length === 0 && activeSheetIdx === 0) state.ledger = JSON.parse(JSON.stringify(defaultLedger));
   state.ledger.forEach(e => {
     if (!Array.isArray(e.items))    e.items    = toArray(e.items);
     if (!Array.isArray(e.payments)) e.payments = toArray(e.payments);
@@ -1177,15 +1178,13 @@ function switchSheet(idx) {
 function addSheet() {
   _saveCurrentSheetState();
   const name = 'Sheet ' + (sessions.sheets.length + 1);
-  const newParts = _defaultPartsConfig();
-  const newWhole = _defaultWholePiecesConfig();
   sessions.sheets.push({
     name,
-    partsConfig: newParts,
-    wholePiecesConfig: newWhole,
+    partsConfig: [],
+    wholePiecesConfig: [],
     chickState: {
-      parts: newParts.map(p => ({ ...p, soldKg: 0, utangEntries: [] })),
-      whole: { status: newWhole.map(() => null), statusMeta: {} },
+      parts: [],
+      whole: { status: [], statusMeta: {} },
       expenses: [],
       ledger: [],
       _ts: 0
