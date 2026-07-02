@@ -650,6 +650,28 @@
     color: var(--muted);
   }
 
+  /* SHEET TABS */
+  .sheet-tab-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 6px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s;
+  }
+  .sheet-tab-btn:hover { color: var(--text); border-color: var(--accent); }
+  .sheet-tab-btn.stab-active { background: var(--accent); color: #000; border-color: var(--accent); font-weight: 600; }
+  .stab-del { opacity: 0.6; font-size: 14px; line-height: 1; padding: 0 2px; }
+  .stab-del:hover { opacity: 1; color: var(--red); }
+  .stab-add { background: none; border-style: dashed; }
+
   @media (max-width: 600px) {
     .summary-grid { grid-template-columns: 1fr; }
     .product-stats { gap: 12px; }
@@ -706,6 +728,47 @@
 
 <!-- CHICKTRACK TAB -->
 <div id="view-chick">
+
+<!-- Sheet sub-tabs -->
+<div style="max-width:960px;margin:0 auto 20px;display:flex;align-items:center;gap:6px;flex-wrap:wrap" id="sheet-tabs"></div>
+
+<!-- Manage Products for current sheet -->
+<div style="max-width:960px;margin:0 auto 16px">
+  <details id="manage-products-section">
+    <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;list-style:none;display:flex;align-items:center;gap:8px">
+      <span>⚙️ Manage Products &amp; Pieces</span>
+    </summary>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:12px">
+      <!-- Add Product -->
+      <div class="product-card">
+        <div style="padding:14px 18px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Add Product</div>
+          <div style="display:grid;grid-template-columns:2fr 1fr repeat(3,1fr) auto;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="np-name" class="ledger-add-input" placeholder="Name (e.g. Chicken Feet)">
+            <input type="text" id="np-emoji" class="ledger-add-input" placeholder="Emoji 🦶" style="max-width:80px">
+            <input type="number" id="np-kg" class="ledger-add-input" placeholder="Total kg" min="0" step="0.1">
+            <input type="number" id="np-buy" class="ledger-add-input" placeholder="Buy/kg" min="0" step="1">
+            <input type="number" id="np-sell" class="ledger-add-input" placeholder="Sell/kg" min="0" step="1">
+            <button class="btn btn-primary" style="padding:7px 14px;white-space:nowrap" onclick="addSheetProduct()">+ Add</button>
+          </div>
+        </div>
+      </div>
+      <!-- Add Whole Piece -->
+      <div class="product-card">
+        <div style="padding:14px 18px">
+          <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Add Whole Chicken Piece</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="number" id="nw-kg" class="ledger-add-input" placeholder="Weight (kg)" min="0" step="0.001" style="max-width:140px">
+            <input type="number" id="nw-cost" class="ledger-add-input" placeholder="Cost ₱" min="0" step="1" style="max-width:120px">
+            <input type="number" id="nw-sell" class="ledger-add-input" placeholder="Sell ₱" min="0" step="1" style="max-width:120px">
+            <button class="btn btn-primary" style="padding:7px 14px;background:var(--green);white-space:nowrap" onclick="addSheetWholePiece()">+ Add Piece</button>
+          </div>
+          <div id="whole-piece-list" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+        </div>
+      </div>
+    </div>
+  </details>
+</div>
 
 <!-- SUMMARY CARDS -->
 <div class="summary-grid">
@@ -863,7 +926,7 @@
 
 <script>
 // ── DATA ──────────────────────────────────────────────
-const parts = [
+let parts = [
   { id:'head',  name:'Chicken Head', kg:10,   buyPkg:60,  sellPkg:80,  emoji:'🐔' },
   { id:'feet',  name:'Chicken Feet', kg:10,   buyPkg:95,  sellPkg:125, emoji:'🦶' },
   { id:'proven',name:'Proven',       kg:10,   buyPkg:95,  sellPkg:140, emoji:'🫀' },
@@ -871,7 +934,7 @@ const parts = [
   { id:'isaw',  name:'Isaw',         kg:10,   buyPkg:105, sellPkg:140, emoji:'🍢' },
 ];
 
-const wholePieces = [
+let wholePieces = [
   { kg:0.955, cost:147.00, sell:210.00 },
   { kg:0.891, cost:137.20, sell:196.00 },
   { kg:0.932, cost:143.50, sell:205.00 },
@@ -907,12 +970,7 @@ async function cloudLoad() {
 
 let saveTimer = null;
 function saveState() {
-  state._ts = Date.now();
-  localStorage.setItem('chicktrack', JSON.stringify(state));
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    fetch(FB_URL, { method: 'PUT', body: JSON.stringify(state) }).catch(() => {});
-  }, 800);
+  saveSessions();
 }
 
 // ── STATE ─────────────────────────────────────────────
@@ -943,7 +1001,7 @@ function toArray(v) {
 let localSaved = null;
 try { localSaved = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
 
-// Build state safely — fall back to default on any corruption
+// state will be overridden by _loadSheetIntoGlobals after sessions init
 let state;
 try {
   state = localSaved ? JSON.parse(JSON.stringify(localSaved)) : JSON.parse(JSON.stringify(defaultState));
@@ -1004,6 +1062,256 @@ function normalizeState() {
 
 normalizeState();
 let _ledgerIdSeq = Math.max(0, ...state.ledger.map(e => e.id || 0), 0) + 1;
+
+// ── SESSIONS (MULTI-SHEET) ────────────────────────────
+const SESSIONS_KEY = 'chicktrack-sessions';
+const FB_SESSIONS  = 'https://chicktracker-71f42-default-rtdb.asia-southeast1.firebasedatabase.app/sessions.json';
+let sessionsSaveTimer = null;
+let activeSheetIdx = 0;
+
+function _defaultPartsConfig() {
+  return [
+    { id:'head',   name:'Chicken Head', emoji:'🐔', kg:10, buyPkg:60,  sellPkg:80  },
+    { id:'feet',   name:'Chicken Feet', emoji:'🦶', kg:10, buyPkg:95,  sellPkg:125 },
+    { id:'proven', name:'Proven',       emoji:'🫀', kg:10, buyPkg:95,  sellPkg:140 },
+    { id:'fat',    name:'Chicken Fat',  emoji:'🧈', kg:3,  buyPkg:75,  sellPkg:100 },
+    { id:'isaw',   name:'Isaw',         emoji:'🍢', kg:10, buyPkg:105, sellPkg:140 },
+  ];
+}
+function _defaultWholePiecesConfig() {
+  return [
+    { kg:0.955, cost:147.00, sell:210.00 },
+    { kg:0.891, cost:137.20, sell:196.00 },
+    { kg:0.932, cost:143.50, sell:205.00 },
+    { kg:0.932, cost:143.50, sell:205.00 },
+    { kg:0.909, cost:140.00, sell:200.00 },
+    { kg:0.864, cost:133.00, sell:190.00 },
+    { kg:0.886, cost:136.50, sell:195.00 },
+    { kg:0.977, cost:150.50, sell:215.00 },
+    { kg:0.909, cost:140.00, sell:200.00 },
+    { kg:0.909, cost:140.00, sell:200.00 },
+    { kg:0.955, cost:147.00, sell:210.00 },
+    { kg:0.909, cost:140.00, sell:200.00 },
+    { kg:0.932, cost:143.50, sell:205.00 },
+    { kg:0.932, cost:143.50, sell:205.00 },
+    { kg:0.977, cost:150.50, sell:215.00 },
+  ];
+}
+
+function loadSessions() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SESSIONS_KEY));
+    if (raw && Array.isArray(raw.sheets) && raw.sheets.length) return raw;
+  } catch(e) {}
+  // First time: migrate existing chicktrack state into sheet 0
+  let s0 = null;
+  try { s0 = JSON.parse(localStorage.getItem('chicktrack')); } catch(e) {}
+  return {
+    _ts: Date.now(),
+    active: 0,
+    sheets: [{
+      name: 'Sheet 1',
+      partsConfig: _defaultPartsConfig(),
+      wholePiecesConfig: _defaultWholePiecesConfig(),
+      chickState: s0 || JSON.parse(JSON.stringify(defaultState))
+    }]
+  };
+}
+
+let sessions = loadSessions();
+activeSheetIdx = Math.min(sessions.active || 0, sessions.sheets.length - 1);
+
+function getActiveSheet() { return sessions.sheets[activeSheetIdx]; }
+
+function _loadSheetIntoGlobals(idx) {
+  const sheet = sessions.sheets[idx];
+  if (!sheet) return;
+  parts = sheet.partsConfig.map(p => ({ ...p }));
+  wholePieces = sheet.wholePiecesConfig.map(p => ({ ...p }));
+  try {
+    state = sheet.chickState ? JSON.parse(JSON.stringify(sheet.chickState)) : JSON.parse(JSON.stringify(defaultState));
+  } catch(e) { state = JSON.parse(JSON.stringify(defaultState)); }
+}
+
+function _saveCurrentSheetState() {
+  const sheet = getActiveSheet();
+  state._ts = Date.now();
+  sheet.chickState = JSON.parse(JSON.stringify(state));
+  sheet.partsConfig = state.parts.map(p => ({
+    id: p.id, name: p.name, emoji: p.emoji, kg: p.kg, buyPkg: p.buyPkg, sellPkg: p.sellPkg
+  }));
+  sheet.wholePiecesConfig = wholePieces.map(p => ({ kg: p.kg, cost: p.cost, sell: p.sell }));
+}
+
+function saveSessions() {
+  _saveCurrentSheetState();
+  sessions._ts = Date.now();
+  localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions));
+  // Legacy: keep sheet 0 synced to /data.json
+  const s0state = sessions.sheets[0] && sessions.sheets[0].chickState;
+  if (s0state) {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      fetch(FB_URL, { method:'PUT', body: JSON.stringify(s0state) }).catch(()=>{});
+    }, 800);
+  }
+  clearTimeout(sessionsSaveTimer);
+  sessionsSaveTimer = setTimeout(() => {
+    fetch(FB_SESSIONS, { method:'PUT', body: JSON.stringify(sessions) }).catch(()=>{});
+  }, 800);
+}
+
+function switchSheet(idx) {
+  if (idx === activeSheetIdx) return;
+  _saveCurrentSheetState();
+  activeSheetIdx = idx;
+  sessions.active = idx;
+  _loadSheetIntoGlobals(idx);
+  normalizeState();
+  _ledgerIdSeq = Math.max(0, ...(state.ledger||[]).map(e => e.id || 0), 0) + 1;
+  saveSessions();
+  renderSheetTabs();
+  render();
+}
+
+function addSheet() {
+  _saveCurrentSheetState();
+  const name = 'Sheet ' + (sessions.sheets.length + 1);
+  const newParts = _defaultPartsConfig();
+  const newWhole = _defaultWholePiecesConfig();
+  sessions.sheets.push({
+    name,
+    partsConfig: newParts,
+    wholePiecesConfig: newWhole,
+    chickState: {
+      parts: newParts.map(p => ({ ...p, soldKg: 0, utangEntries: [] })),
+      whole: { status: newWhole.map(() => null), statusMeta: {} },
+      expenses: [],
+      ledger: [],
+      _ts: 0
+    }
+  });
+  const newIdx = sessions.sheets.length - 1;
+  activeSheetIdx = newIdx;
+  sessions.active = newIdx;
+  _loadSheetIntoGlobals(newIdx);
+  normalizeState();
+  _ledgerIdSeq = 1;
+  saveSessions();
+  renderSheetTabs();
+  render();
+}
+
+function deleteSheet(idx) {
+  if (sessions.sheets.length <= 1) { alert('Cannot delete the only sheet.'); return; }
+  if (!confirm(`Delete "${sessions.sheets[idx].name}"? All data will be lost.`)) return;
+  sessions.sheets.splice(idx, 1);
+  const newIdx = Math.min(activeSheetIdx, sessions.sheets.length - 1);
+  activeSheetIdx = newIdx;
+  sessions.active = newIdx;
+  _loadSheetIntoGlobals(newIdx);
+  normalizeState();
+  _ledgerIdSeq = Math.max(0, ...(state.ledger||[]).map(e => e.id || 0), 0) + 1;
+  saveSessions();
+  renderSheetTabs();
+  render();
+}
+
+function renameSheet(idx) {
+  const name = prompt('Sheet name:', sessions.sheets[idx].name);
+  if (!name || !name.trim()) return;
+  sessions.sheets[idx].name = name.trim();
+  saveSessions();
+  renderSheetTabs();
+}
+
+function renderSheetTabs() {
+  const el = document.getElementById('sheet-tabs');
+  if (!el) return;
+  el.innerHTML = sessions.sheets.map((s, i) => `
+    <button class="sheet-tab-btn${i === activeSheetIdx ? ' stab-active' : ''}" onclick="switchSheet(${i})" ondblclick="renameSheet(${i})" title="Double-click to rename">
+      ${escHtml(s.name)}
+      ${sessions.sheets.length > 1 ? `<span class="stab-del" onclick="event.stopPropagation();deleteSheet(${i})">×</span>` : ''}
+    </button>
+  `).join('') + `<button class="sheet-tab-btn stab-add" onclick="addSheet()">+ New Sheet</button>`;
+}
+
+function addSheetProduct() {
+  const name  = (document.getElementById('np-name').value || '').trim();
+  const emoji = (document.getElementById('np-emoji').value || '').trim() || '📦';
+  const kg    = parseFloat(document.getElementById('np-kg').value) || 1;
+  const buy   = parseFloat(document.getElementById('np-buy').value) || 0;
+  const sell  = parseFloat(document.getElementById('np-sell').value) || 0;
+  if (!name) { document.getElementById('np-name').focus(); return; }
+  const id = 'c' + Date.now();
+  const cfg = { id, name, emoji, kg, buyPkg: buy, sellPkg: sell };
+  parts.push({ ...cfg });
+  state.parts.push({ ...cfg, soldKg: 0, utangEntries: [] });
+  document.getElementById('np-name').value = '';
+  document.getElementById('np-emoji').value = '';
+  document.getElementById('np-kg').value = '';
+  document.getElementById('np-buy').value = '';
+  document.getElementById('np-sell').value = '';
+  saveSessions();
+  render();
+}
+
+function addSheetWholePiece() {
+  const kg   = parseFloat(document.getElementById('nw-kg').value) || 0;
+  const cost = parseFloat(document.getElementById('nw-cost').value) || 0;
+  const sell = parseFloat(document.getElementById('nw-sell').value) || 0;
+  if (kg <= 0) { document.getElementById('nw-kg').focus(); return; }
+  const piece = { kg, cost, sell };
+  wholePieces.push(piece);
+  state.whole.status.push(null);
+  document.getElementById('nw-kg').value = '';
+  document.getElementById('nw-cost').value = '';
+  document.getElementById('nw-sell').value = '';
+  saveSessions();
+  render();
+}
+
+function removeSheetWholePiece(idx) {
+  if (!confirm(`Remove whole chicken piece #${idx+1}?`)) return;
+  wholePieces.splice(idx, 1);
+  state.whole.status.splice(idx, 1);
+  const newMeta = {};
+  Object.entries(state.whole.statusMeta || {}).forEach(([k,v]) => {
+    const n = parseInt(k);
+    if (n < idx) newMeta[String(n)] = v;
+    else if (n > idx) newMeta[String(n-1)] = v;
+  });
+  state.whole.statusMeta = newMeta;
+  saveSessions();
+  render();
+}
+
+async function sessionsCloudLoad() {
+  try {
+    const res = await fetch(FB_SESSIONS);
+    if (!res.ok) return;
+    const cloud = await res.json();
+    if (!cloud || !Array.isArray(cloud.sheets)) return;
+    const localRaw = JSON.parse(localStorage.getItem(SESSIONS_KEY) || 'null');
+    if ((cloud._ts || 0) > (localRaw?._ts || 0)) {
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(cloud));
+      sessions = cloud;
+      activeSheetIdx = Math.min(sessions.active || 0, sessions.sheets.length - 1);
+      _loadSheetIntoGlobals(activeSheetIdx);
+      normalizeState();
+      _ledgerIdSeq = Math.max(0, ...(state.ledger||[]).map(e => e.id || 0), 0) + 1;
+      renderSheetTabs();
+      render();
+    }
+  } catch(e) {}
+}
+
+function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// Override initial state with active sheet data
+_loadSheetIntoGlobals(activeSheetIdx);
+normalizeState();
+_ledgerIdSeq = Math.max(0, ...(state.ledger||[]).map(e => e.id || 0), 0) + 1;
 
 // ── HELPERS ───────────────────────────────────────────
 const fmt = n => '₱' + Number(n).toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2});
@@ -1530,12 +1838,25 @@ function ledgerMarkPaid(id) {
   saveState(); render();
 }
 
+function renderWholePieceList() {
+  const el = document.getElementById('whole-piece-list');
+  if (!el) return;
+  if (!wholePieces.length) { el.textContent = 'No whole pieces yet.'; return; }
+  el.innerHTML = wholePieces.map((p,i) => `
+    <span style="display:inline-flex;align-items:center;gap:4px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;margin:2px">
+      #${i+1} · ${p.kg}kg · ${fmt(p.cost)} → ${fmt(p.sell)}
+      <button onclick="removeSheetWholePiece(${i})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:0 0 0 4px">×</button>
+    </span>
+  `).join('');
+}
+
 function render() {
   try { renderParts();    } catch(e) { console.error('renderParts',    e); }
   try { renderWhole();   } catch(e) { console.error('renderWhole',   e); }
   try { renderExpenses();} catch(e) { console.error('renderExpenses',e); }
   try { renderLedger();  } catch(e) { console.error('renderLedger',  e); }
   try { renderSummary(); } catch(e) { console.error('renderSummary', e); }
+  try { renderWholePieceList(); } catch(e) { console.error('renderWholePieceList', e); }
 }
 
 // ── INTERACTIONS ──────────────────────────────────────
@@ -1755,9 +2076,8 @@ function resetData() {
   state.ledger = JSON.parse(JSON.stringify(defaultLedger));
   _ledgerIdSeq = defaultLedger.length + 1;
   normalizeState();
-  localStorage.setItem('chicktrack', JSON.stringify(state));
-  fetch(FB_URL, { method: 'PUT', body: JSON.stringify(state) }).catch(() => {});
   render();
+  saveSessions();
 }
 
 // ── TABS ──────────────────────────────────────────────
@@ -1766,6 +2086,7 @@ function switchTab(tab) {
     document.getElementById('view-'+t).style.display = t === tab ? '' : 'none';
     document.getElementById('tab-'+t).classList.toggle('active', t === tab);
   });
+  if (tab === 'chick')  { renderSheetTabs(); renderWholePieceList(); }
   if (tab === 'daily')  { renderDaily();  dailyCloudLoad(); }
   if (tab === 'wallet') { renderWallet(); dailyCloudLoad(); walletCloudLoad(); }
 }
@@ -2074,8 +2395,11 @@ document.getElementById('dateTag').textContent = new Date().toLocaleDateString('
 // ── INIT ──────────────────────────────────────────────
 document.getElementById('d-date').value = new Date().toISOString().slice(0,10);
 render();
+renderSheetTabs();
+renderWholePieceList();
 dailyCloudLoad();
 walletCloudLoad();
+sessionsCloudLoad();
 cloudLoad().then(cloudData => {
   if (cloudData) {
     const localTs = state._ts || 0;
