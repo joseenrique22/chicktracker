@@ -1510,9 +1510,11 @@ function ledgerAddPay(id) {
   const note = document.getElementById('lpnote-'+id).value.trim() || 'Payment';
   if (amt <= 0) return;
   e.payments.push({ note, amt });
-  const total = e.items.reduce((s, it) => s + it.amt, 0);
-  const paid  = e.payments.reduce((s, p) => s + p.amt, 0);
-  if (paid >= total) e.fullyPaid = true;
+  const manualTotal = (e.items||[]).reduce((s, it) => s + (Number(it.amt)||0), 0);
+  const stockTotal  = getStockItemsForCustomer(e.name).reduce((s, it) => s + (Number(it.amt)||0), 0);
+  const total = manualTotal + stockTotal;
+  const paid  = e.payments.reduce((s, p) => s + (Number(p.amt)||0), 0);
+  if (total > 0 && paid >= total) e.fullyPaid = true;
   saveState(); render();
 }
 function ledgerDelPay(id, pi) {
