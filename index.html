@@ -734,7 +734,7 @@
 
 <!-- Manage Products for current sheet -->
 <div style="max-width:960px;margin:0 auto 16px">
-  <details id="manage-products-section">
+  <details id="manage-products-section" open>
     <summary style="cursor:pointer;font-size:13px;font-weight:600;color:var(--muted);padding:8px 0;list-style:none;display:flex;align-items:center;gap:8px">
       <span>⚙️ Manage Products &amp; Pieces</span>
     </summary>
@@ -743,13 +743,13 @@
       <div class="product-card">
         <div style="padding:14px 18px">
           <div style="font-size:13px;font-weight:600;margin-bottom:10px;color:var(--text)">Add Product</div>
-          <div style="display:grid;grid-template-columns:2fr 1fr repeat(3,1fr) auto;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="text" id="np-name" class="ledger-add-input" placeholder="Name (e.g. Chicken Feet)">
-            <input type="text" id="np-emoji" class="ledger-add-input" placeholder="Emoji 🦶" style="max-width:80px">
-            <input type="number" id="np-kg" class="ledger-add-input" placeholder="Total kg" min="0" step="0.1">
-            <input type="number" id="np-buy" class="ledger-add-input" placeholder="Buy/kg" min="0" step="1">
-            <input type="number" id="np-sell" class="ledger-add-input" placeholder="Sell/kg" min="0" step="1">
-            <button class="btn btn-primary" style="padding:7px 14px;white-space:nowrap" onclick="addSheetProduct()">+ Add</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            <input type="text" id="np-name" class="ledger-add-input" placeholder="Name (e.g. Chicken Feet)" style="flex:2;min-width:140px">
+            <input type="text" id="np-emoji" class="ledger-add-input" placeholder="Emoji" style="width:70px">
+            <input type="number" id="np-kg" class="ledger-add-input" placeholder="Total kg" min="0" step="0.1" style="width:90px">
+            <input type="number" id="np-buy" class="ledger-add-input" placeholder="Buy/kg ₱" min="0" step="1" style="width:90px">
+            <input type="number" id="np-sell" class="ledger-add-input" placeholder="Sell/kg ₱" min="0" step="1" style="width:90px">
+            <button class="btn btn-primary" style="padding:7px 16px;white-space:nowrap" onclick="addSheetProduct()">+ Add</button>
           </div>
         </div>
       </div>
